@@ -1,0 +1,482 @@
+
+
+
+#include <macros.h>
+#include <stdio.h>
+#include	"HAL.H"			// 其它单片机需修改HAL*硬件抽象层的几个文件
+
+#define DBG 0
+
+
+unsigned int flash_bufferPoint; 
+char flash_buf[256]; //FALSH页缓冲区,M128的一个Flash页为256字节(128字) 
+long address = 0; 
+   
+
+unsigned char tx_data[64];
+unsigned char UpdateFlag=0;
+
+unsigned char Ver[64]="Bootloader SYYC_1A_PCB60 (20160121)";
+
+const unsigned char UpdataText[2048]="\
+20160104 Ver:1.0 Chen GuiYang\n\r\
+20160119 Ver:1.1 Chen GuiYang\n\r\
+20160122 Ver:1.2 Chen GuiYang\n\r";
+
+
+extern void USBStart(void);
+extern void EP2SendConst(UINT8 mLen, const unsigned char  *mBuf);
+extern unsigned char	UsbConfig ,UsbReset;	 
+
+//USB接收缓冲区数据结构
+typedef struct RXDATA
+{
+ unsigned char flag;
+ unsigned char len;
+ unsigned char buf[64];
+};
+struct RXDATA RxData;
+
+
+
+	   
+extern void	Init374Device( void );  // 初始化USB设备
+extern void EP2Send(UINT8 mLen, PUINT8 mBuf);
+extern unsigned char	UsbConfig ;	// USB配置标志
+
+void DelayMs(unsigned int t);
+
+//OSC=8M Hz
+//UART0 initialize
+// desired baud rate: 38400
+// actual: baud rate:37500 (2.4%)
+void uart0_init(void)
+{
+ UCSR0B = 0x00; //disable while setting baud rate
+ UCSR0A = 0x00;
+ UCSR0C = 0x06;
+ UBRR0L = 0x0B; //set baud rate lo
+ UBRR0H = 0x00; //set baud rate hi
+ UCSR0B = 0x18;
+}
+
+
+
+void port_init(void)
+{
+ PORTA = 0x04;//PA2=SCS/LED,CH374片选和LED控制
+ DDRA  = 0x04;//CH374也不片选
+ 
+ PORTB = 0x00;//PB7=Power，存储器和传感器电源控制,开存储器电源
+ DDRB  = 0x84;//PB3为MISO，判断仪器上电状态的管脚，内部上拉
+ 
+ PORTC = 0x00; 
+ DDRC  = 0x00;
+ 
+ PORTD = 0x00; 
+ DDRD  = 0x00; 
+ 
+ PORTE = 0x00;
+ DDRE  = 0x00;
+ 
+ PORTF = 0x3c;//PF2、3、4、5为存储器片选控制
+ DDRF  = 0x3c;//4个存储器均不片选
+ 
+ PORTG = 0x00;
+ DDRG  = 0x00;
+}
+
+void DelayMs(unsigned int t)
+{
+   float f;
+   unsigned int n;
+   if(t>8388)
+     t=8388;
+   f=t;
+   f*=7.8125;
+   n=f;
+   TCNT1=65536-n;
+   TCCR1B=0x05;//启动定时器，1024分频
+   TIFR|=0x04;//清定时器1中断标志
+   while((TIFR&0x04)==0x00);
+   TCCR1B=0x00;//停止定时器
+}
+
+
+//call this routine to initialize all peripherals
+void init_devices(void)
+{
+ //stop errant interrupts until set up
+ CLI(); //disable all interrupts
+ XDIV  = 0x00; //xtal divider
+ XMCRA = 0x00; //external memory
+ port_init();
+#if DBG
+ uart0_init();
+#endif
+
+ MCUCR = 0x00;
+ EICRA = 0x00; //extended ext ints
+ EICRB = 0x00; //extended ext ints
+ EIMSK = 0x00;
+ TIMSK = 0x00; //timer interrupt sources
+ ETIMSK = 0x00; //extended timer interrupt sources
+ SEI(); //re-enable interrupts
+ //all peripherals are now initialized
+}
+
+
+//擦除(code=0x03)和写入(code=0x05)一个Flash页 
+void boot_page_ew(long p_address,char code) 
+{ 
+    asm("mov r30,r16\n" 
+        "mov r31,r17\n" 
+        "out 0x3b,r18\n");            //将页地址放入Z寄存器和RAMPZ的Bit0中 
+    SPMCSR = code;                //寄存器SPMCSR中为操作码 
+    asm("spm\n");                    //对指定Flash页进行操作 
+}         
+//填充Flash缓冲页中的一个字 
+void boot_page_fill(unsigned int address,int data) 
+{ 
+    asm("mov r30,r16\n" 
+        "mov r31,r17\n"             //Z寄存器中为填冲页内地址 
+        "mov r0,r18\n" 
+        "mov r1,r19\n");            //R0R1中为一个指令字 
+    SPMCSR = 0x01; 
+    asm("spm\n"); 
+} 
+//等待一个Flash页的写完成 
+void wait_page_rw_ok(void) 
+{ 
+      while(SPMCSR & 0x40) 
+     { 
+         while(SPMCSR & 0x01); 
+         SPMCSR = 0x11; 
+         asm("spm\n"); 
+     } 
+} 
+//更新一个Flash页的完整处理 
+void write_one_page(void) 
+{ 
+    int i; 
+    boot_page_ew(address,0x03);                    //擦除一个Flash页 
+    wait_page_rw_ok();                            //等待擦除完成 
+	 
+    for(i=0;i<256;i+=2)                //将数据填入Flash缓冲页中 
+    { 
+        boot_page_fill(i, flash_buf[i]+(flash_buf[i+1]<<8)); 
+    } 
+    boot_page_ew(address,0x05);                    //将缓冲页数据写入一个Flash页 
+    wait_page_rw_ok();                            //等待写入完成 
+}        
+
+
+
+void delay(unsigned int t) //y=x+3(us)
+{
+ while(t--);
+}
+
+/*********************************
+采样电池电压子程序
+**************************/
+unsigned int SampleADC(void)
+{  unsigned char i;
+   unsigned int k;
+    ADCSRA&=0xF7;//关AD中断
+	ADMUX=0xC7;//选择ADC7单端输入通道
+	ADCSRA|=0xE3;//ADC使能，ADC开始转换，ADC自动触发使能（连续转换模式），8分频 
+	while((ADCSRA&0x10)==0);
+	ADCSRA|=0x10;//清AD中断标志
+	k=0;
+	for(i=0;i<64;i++)
+	{ADCSRA=0xc7;//ADC使能，ADC开始转换，单次转换，128分频
+	while((ADCSRA&0x10)==0);
+	ADCSRA|=0x10;//清AD中断标志
+	k+=(ADC&0x03ff);
+	}	 
+    ADCSRA=0x00;//ADC不使能，ADC不开始转换,让REF不输出
+	return (k/64);
+}
+
+//主程序 
+void main(void) 
+{ 
+   unsigned int i ; 
+   unsigned char j;
+   unsigned char int0,miso;
+  
+   delay(1000);
+	  
+   init_devices();
+
+ 
+     
+   //内部上拉外部下拉时，输出变输入后，口线立即变高，5us后变低
+   SFIOR&=0xfb;   //上拉不禁止,bit2=0
+   PORTB|=0x08;  //PB3内部上拉
+   DDRB&=0xf7;   //PB3设为输入 
+   PORTD|=0x01;  //PD0内部上拉
+   DDRD&=0xfe;   //PD0设为输入 
+   
+   SFIOR&=0xfb;   //上拉不禁止,bit2=0
+   PORTB=0x08;  //PB3内部上拉
+   DDRB&=0xf7;   //PB3设为输入 
+   PORTB=0x08;  //PB3内部上拉
+   PORTD|=0x01;  //PD0内部上拉
+   DDRD&=0xfe;   //PD0设为输入 
+   PORTD|=0x01;  //PD0内部上拉
+   
+   DelayMs(100);
+   
+   DDRB&=0xf7;   //PB3设为输入 
+   DDRD&=0xfe;   //PD0设为输入 
+   
+   int0=(PIND&0x01);
+   miso=(PINB&0x08);
+   
+
+   if(miso)//存储采样状态
+   {  
+     #if DBG
+      printf("Sample Status\r\n");
+	  #endif
+	  UCSR0B = 0x00; //disable 
+	   //退出Bootloader程序，从0x0000处执行应用程序 
+       RAMPZ = 0x00;                    //RAMPZ清零初始化
+       MCUCR = 0x01; 
+       MCUCR = 0x00;                    //将中断向量表迁移到应用程序区头部   
+       asm("jmp 0x0000\n");                //跳转到Flash的0x0000处，执行用户的应用程序 
+
+   }
+    else //回放状态
+   {  CLI();
+      EIMSK = 0x01;
+	  SEI();
+   #if DBG
+      printf("Communication Status\r\n");
+   #endif
+      RxData.flag=0;
+   
+      //内部上拉外部下拉时，输入变输出后，口线立即变低
+	  //初始化SPI总线
+	  
+	  
+	  DDRB=0x07;//PB0/1/2设为输出 
+      DelayMs(30);
+      SPCR = 0x00; //SPI必须先禁止，再使能，否则会使能不成功
+	  DelayMs(30);
+	  /*
+	  SPCR = 0x5d; //setup SPICLK=F0sc/16
+	  SPSR = 0x00; //setup SPI时钟频率不双倍
+	  SPCR = 0x5d; //setup SPICLK=F0sc/16
+	  */
+	  
+	  SPCR = 0x5c; //setup SPI SPICLK=F0sc/4
+	  SPSR = 0x01; //setup SPI SPI时钟频率双倍
+	  SPCR = 0x5c; //setup SPISPICLK=F0sc/4
+	  
+	  address=0 ;
+      flash_bufferPoint=0; 
+      UpdateFlag=0;
+	  
+	  USBStart();
+	  
+	#if DBG   
+	  printf("Init374Device Begin\r\n");
+	#endif
+	  
+	 for(j=0;j<100;j++)	  //常亮3秒，等待PC机加载USB驱动，如是安装驱动，则不受超时限制，直到驱动安装完毕
+	 {
+	  while(UsbReset==1)
+	   {
+	    if(UsbConfig == 1)
+		 {
+		  break;
+		 }
+	   }
+	  if(UsbConfig == 1) 
+	    {
+	     break; //等待USB驱动安装成功
+		}
+	  DelayMs(30); 
+	  }
+	 
+
+	 if(j>=100)//在规定时间内没有加载驱动，说明地面回放仪没有连上电脑，则直接进入到采样状态
+	  {
+	     UCSR0B = 0x00; //disable 
+	   //退出Bootloader程序，从0x0000处执行应用程序 
+       RAMPZ = 0x00;                    //RAMPZ清零初始化
+       MCUCR = 0x01; 
+       MCUCR = 0x00;                    //将中断向量表迁移到应用程序区头部   
+       asm("jmp 0x0000\n");                //跳转到Flash的0x0000处，执行用户的应用程序 
+
+	  }
+	    
+	  
+	  #if DBG
+	  printf("Init374Device End\r\n");
+	  #endif
+	  
+	 
+	  #if DBG
+	  printf("UsbConfig OK\r\n");
+	  #endif
+       
+	   UCSR0B = 0x00; //disable 
+	   
+      //开始接收数据块 
+	         while(1)
+			  { if( RxData.flag )
+			    {RxData.flag=0;
+				 if( RxData.len==8 )//处理上位机命令
+				 { 
+					 
+			       if(RxData.buf[0]=='W' ) //写命令
+			       { 
+			   	     EP2Send(8, &RxData.buf[0]);	//原样返回8字节响应写操作命令			   		   	
+			       }
+			  
+			       if(RxData.buf[0]=='N' ) //纯操作命令
+			       {		   		   
+			        switch (RxData.buf[1])
+			         {
+				 case 0x0f://复位
+				 tx_data[0]=RxData.buf[0];tx_data[1]=RxData.buf[1];tx_data[2]=RxData.buf[2];tx_data[3]=RxData.buf[3];
+					  tx_data[4]=RxData.buf[4];tx_data[5]=RxData.buf[5];tx_data[6]=RxData.buf[6];tx_data[7]=RxData.buf[7];
+					  EP2Send(8, tx_data);
+					  UpdateFlag=0;		
+					  address=0 ;
+                      flash_bufferPoint=0; 
+				 break;
+				 case 0x0b://开始更新
+				 tx_data[0]=RxData.buf[0];tx_data[1]=RxData.buf[1];tx_data[2]=RxData.buf[2];tx_data[3]=RxData.buf[3];
+					  tx_data[4]=RxData.buf[4];tx_data[5]=RxData.buf[5];tx_data[6]=RxData.buf[6];tx_data[7]=RxData.buf[7];
+					  EP2Send(8, tx_data);
+					  UpdateFlag=1;	
+					  address=0 ;
+                      flash_bufferPoint=0; 	
+				 break;
+			     case 0x0c://退出更新
+				 tx_data[0]=RxData.buf[0];tx_data[1]=RxData.buf[1];tx_data[2]=RxData.buf[2];tx_data[3]=RxData.buf[3];
+					  tx_data[4]=RxData.buf[4];tx_data[5]=RxData.buf[5];tx_data[6]=RxData.buf[6];tx_data[7]=RxData.buf[7];
+					  EP2Send(8, tx_data);
+					  UpdateFlag=0;				   
+					  //退出Bootloader程序，从0x0000处执行应用程序 
+                      RAMPZ = 0x00;                    //RAMPZ清零初始化
+                      MCUCR = 0x01; 
+                      MCUCR = 0x00;                    //将中断向量表迁移到应用程序区头部   
+                      asm("jmp 0x0000\n");                //跳转到Flash的0x0000处，执行用户的应用程序 
+				 break;		
+				 case 0x17://采电池电压
+				      i=SampleADC();
+				 	  RxData.buf[2]=i;
+				 	  RxData.buf[3]=(i>>8);
+				 	  EP2Send(8, &RxData.buf[0]);	
+				 break;	 
+				 default:
+				      EP2Send(8, &RxData.buf[0]);			 
+				 break;
+				 }
+			  }
+			  
+			  if(RxData.buf[0]=='R' ) //读命令
+			   {	
+			   for(i=0;i<64;i++)
+				  tx_data[i]=0xff;
+				     		   
+			    switch (RxData.buf[1])
+			     {
+				 case 0x00:// 提取坏块表
+				 EP2Send(8, &RxData.buf[0]);				 
+				 for(i=0;i<8;i++)
+				     EP2Send(64, &tx_data[0]);		
+				 break;
+			     case 0x01://读仪器信息，128字节
+				 EP2Send(8, &RxData.buf[0]);	
+				 for(i=0;i<2;i++)
+				     EP2Send(64, &tx_data[0]);		
+				 break;
+				 case 0x02://读测试信息,256字节
+				 EP2Send(8, &RxData.buf[0]);	
+				 for(i=0;i<4;i++)
+				     EP2Send(64, &tx_data[0]);	
+				 break;	
+				 case 0x03://读测试参数，128字节
+				 EP2Send(8, &RxData.buf[0]);	
+				 for(i=0;i<2;i++)
+				     EP2Send(64, &tx_data[0]);	
+				 break;			 	 
+				 case 0x04://读时间表，512字节
+				 EP2Send(8, &RxData.buf[0]);	
+				 for(i=0;i<8;i++)
+				     EP2Send(64, &tx_data[0]);	
+				 break;
+				 case 0x05://读校对表，512字节
+				 EP2Send(8, &RxData.buf[0]);	
+				 for(i=0;i<8;i++)
+				     EP2Send(64, &tx_data[0]);	
+				 break;			 
+				 case 0x06://上传某口井数据
+				 if(RxData.buf[2]<30)//井索引超界下位机不响应
+				 {
+				  EP2Send(8, &RxData.buf[0]);	
+				  }
+				 break;
+				 case 0x07://点测
+				 EP2Send(8, &tx_data[0]);			 			 			 
+				 EP2Send(8, &tx_data[0]);		 
+				 break;
+				 case 0x09://提取固件信息，含量版本，仪器名称，外围芯片序列号等
+				 tx_data[0]=RxData.buf[0];tx_data[1]=RxData.buf[1];tx_data[2]=RxData.buf[2];tx_data[3]=RxData.buf[3];
+					  tx_data[4]=RxData.buf[4];tx_data[5]=RxData.buf[5];tx_data[6]=RxData.buf[6];tx_data[7]=RxData.buf[7];
+					  EP2Send(8, tx_data);
+					  EP2Send(64, Ver);  				
+				 break;
+				 case 0x10://读某页HT
+				 EP2Send(8, &RxData.buf[0]);
+				 for(i=0;i<8;i++)
+				     EP2Send(64, &tx_data[0]);		 
+				 break;
+				 case 0x15: //读某页
+				 EP2Send(8, &RxData.buf[0]);
+				 for(i=0;i<4;i++)
+				     EP2Send(64, &tx_data[0]);	
+				 break;
+				 case 0x19://查看更新内容
+				 EP2Send(8, &RxData.buf[0]);	
+				 for(i=0;i<32;i++)//共2048字节，需32包上传
+				 EP2SendConst(64, (const unsigned char *)&UpdataText[i*64]); 
+				 break;
+				 default:
+				 EP2Send(8, &RxData.buf[0]);	
+				 break;
+				 }
+			     } 	  	   
+				  }
+				 else if( RxData.len==64 )// 收一个完整数据帧，共64字节，填充到页缓冲区
+				  {//ISP过程不能有打印，否则程序跑飞
+				    if(UpdateFlag==1)
+					{ 
+		              for(i=0;i<64;i++)
+				        flash_buf[flash_bufferPoint+i]=RxData.buf[i];
+				      flash_bufferPoint+=64;
+					  					
+					  if(flash_bufferPoint==256)
+					    {  
+					      write_one_page();        //收到256字节写入一页Flash中 
+                    	  address += 256;    //Flash页加1 
+                    	  flash_bufferPoint = 0; 							
+					    }
+						
+					  tx_data[0]=0;tx_data[1]=0;tx_data[2]=0;tx_data[3]=0;
+					  tx_data[4]=0;tx_data[5]=0;tx_data[6]=0;tx_data[7]=0;
+					  EP2Send(8, tx_data);
+					  
+					 }
+				   }
+				  }
+			    }		         
+	  }
+} 

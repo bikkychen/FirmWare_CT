@@ -1,0 +1,1104 @@
+                        .module Flash.c
+                        .area text(rom, con, rel)
+ 0000                   .dbfile Flash.c
+ 0000                   .dbfile D:\Bikky\JDYQ\USB_Load\Flash.c
+ 0000                   .dbfunc e FlashID _FlashID fi
+ 0000           ;              a -> R18
+ 0000           ;              i -> R16,R17
+                        .even
+ 0000           _FlashID::
+ 0000                   .dbline -1
+ 0000                   .dbline 41
+ 0000           ; #include "iom128v.h"
+ 0000           ; #include "macros.h"
+ 0000           ; #include "comm_def.h"
+ 0000           ; 
+ 0000           ; unsigned char z,x,a;
+ 0000           ; unsigned char t[8];
+ 0000           ; 
+ 0000           ; //unsigned char well_block[80];  //第N口井的起始块
+ 0000           ; unsigned char well_counter; //共有多少口井
+ 0000           ; unsigned char num;
+ 0000           ; 
+ 0000           ; //  7   6   5   4   3   2    1     0
+ 0000           ; //  NC  NC /WE ALE CLE /CE  /RE  RDY/B
+ 0000           ; // A0~A7 列地址，即半页内字节索引，每个半页256字节，整页512字节
+ 0000           ; // A8~A22 行地址，即页索引, 共65536页, 每32页称一块, 共2048块
+ 0000           ; 
+ 0000           ; //以下4行需根据新电路图更改,前二行作特殊处理
+ 0000           ; #define ADD_W(a)     {DDRA=0xff;PORTA=a;PORTC=0xf3;PORTC=0xd3;PORTC=0xf3;}
+ 0000           ; #define COM_W(a)     {DDRA=0xff;PORTA=a;PORTC=0xeb;PORTC=0xcb;PORTC=0xeb;}
+ 0000           ; //F口变低输入后，应将其内部上拉，否则第一字节不能输入
+ 0000           ; #define DATA_W(a)    {DDRA=0xff;PORTA=a;PORTC=0xe3;PORTC=0xc3;PORTC=0xe3;}
+ 0000           ; #define DATA_R(a)    {DDRA=0x00;PORTA=0xff;PORTC=0xe3;PORTC=0xe1;PORTC=0xe1;PORTC=0xe1;a=PINA;PORTC=0xe3;}
+ 0000           ; 
+ 0000           ; #define CS_OFF       PORTC|=0xe7;
+ 0000           ; //硬件改动时下行应相应改动
+ 0000           ; #define BUSY         asm("nop");asm("nop");asm("nop");while((PINC&0x01)==0x00);
+ 0000           ; 
+ 0000           ; 
+ 0000           ; 
+ 0000           ; //外扩FLASH操作相关函数
+ 0000           ; unsigned  int FlashID(void);
+ 0000           ; unsigned char FlashDataWrite(unsigned int Shift,unsigned int PageIndex,volatile unsigned char * Dat,unsigned int Len);
+ 0000           ; void FlashDataRead(unsigned int Shift,unsigned int PageIndex,unsigned char * Dat,unsigned int Len);
+ 0000           ; unsigned char EraseBlock(unsigned int Index);
+ 0000           ; 
+ 0000           ; 
+ 0000           ; //外部引用函数
+ 0000           ; extern void delay(unsigned int t);
+ 0000           ; 
+ 0000           ; unsigned  int FlashID(void)
+ 0000           ; {unsigned int i; 
+ 0000                   .dbline 43
+ 0000           ;  unsigned char a;
+ 0000           ;  COM_W(0x90)
+ 0000                   .dbline 43
+ 0000 8FEF              ldi R24,255
+ 0002 8ABB              out 0x1a,R24
+ 0004                   .dbline 43
+ 0004 80E9              ldi R24,144
+ 0006 8BBB              out 0x1b,R24
+ 0008                   .dbline 43
+ 0008 8BEE              ldi R24,235
+ 000A 85BB              out 0x15,R24
+ 000C                   .dbline 43
+ 000C 8BEC              ldi R24,203
+ 000E 85BB              out 0x15,R24
+ 0010                   .dbline 43
+ 0010 8BEE              ldi R24,235
+ 0012 85BB              out 0x15,R24
+ 0014                   .dbline 43
+ 0014                   .dbline 44
+ 0014           ;  ADD_W(0x00)
+ 0014                   .dbline 44
+ 0014 8FEF              ldi R24,255
+ 0016 8ABB              out 0x1a,R24
+ 0018                   .dbline 44
+ 0018 2224              clr R2
+ 001A 2BBA              out 0x1b,R2
+ 001C                   .dbline 44
+ 001C 83EF              ldi R24,243
+ 001E 85BB              out 0x15,R24
+ 0020                   .dbline 44
+ 0020 83ED              ldi R24,211
+ 0022 85BB              out 0x15,R24
+ 0024                   .dbline 44
+ 0024 83EF              ldi R24,243
+ 0026 85BB              out 0x15,R24
+ 0028                   .dbline 44
+ 0028                   .dbline 46
+ 0028           ; 
+ 0028           ;  DATA_R(a)   //a=0xEC
+ 0028                   .dbline 46
+ 0028 2ABA              out 0x1a,R2
+ 002A                   .dbline 46
+ 002A 8FEF              ldi R24,255
+ 002C 8BBB              out 0x1b,R24
+ 002E                   .dbline 46
+ 002E 83EE              ldi R24,227
+ 0030 85BB              out 0x15,R24
+ 0032                   .dbline 46
+ 0032 81EE              ldi R24,225
+ 0034 85BB              out 0x15,R24
+ 0036                   .dbline 46
+ 0036 85BB              out 0x15,R24
+ 0038                   .dbline 46
+ 0038 85BB              out 0x15,R24
+ 003A                   .dbline 46
+ 003A 29B3              in R18,0x19
+ 003C                   .dbline 46
+ 003C 83EE              ldi R24,227
+ 003E 85BB              out 0x15,R24
+ 0040                   .dbline 46
+ 0040                   .dbline 47
+ 0040           ;  i=a<<8; 
+ 0040 022F              mov R16,R18
+ 0042 1127              clr R17
+ 0044 102F              mov R17,R16
+ 0046 0027              clr R16
+ 0048                   .dbline 48
+ 0048           ;  DATA_R(a)  //a=0x75
+ 0048                   .dbline 48
+ 0048 2ABA              out 0x1a,R2
+ 004A                   .dbline 48
+ 004A 8FEF              ldi R24,255
+ 004C 8BBB              out 0x1b,R24
+ 004E                   .dbline 48
+ 004E 83EE              ldi R24,227
+ 0050 85BB              out 0x15,R24
+ 0052                   .dbline 48
+ 0052 81EE              ldi R24,225
+ 0054 85BB              out 0x15,R24
+ 0056                   .dbline 48
+ 0056 85BB              out 0x15,R24
+ 0058                   .dbline 48
+ 0058 85BB              out 0x15,R24
+ 005A                   .dbline 48
+ 005A 29B3              in R18,0x19
+ 005C                   .dbline 48
+ 005C 83EE              ldi R24,227
+ 005E 85BB              out 0x15,R24
+ 0060                   .dbline 48
+ 0060                   .dbline 49
+ 0060           ;  i=i+a;
+ 0060 222E              mov R2,R18
+ 0062 3324              clr R3
+ 0064 020D              add R16,R2
+ 0066 131D              adc R17,R3
+ 0068                   .dbline 51
+ 0068           ;  
+ 0068           ;  CS_OFF
+ 0068 85B3              in R24,0x15
+ 006A 876E              ori R24,231
+ 006C 85BB              out 0x15,R24
+ 006E                   .dbline 53
+ 006E           ;  
+ 006E           ;  return i;
+ 006E                   .dbline -2
+ 006E           L1:
+ 006E                   .dbline 0 ; func end
+ 006E 0895              ret
+ 0070                   .dbsym r a 18 c
+ 0070                   .dbsym r i 16 i
+ 0070                   .dbend
+ 0070                   .dbfunc e FlashDataWrite _FlashDataWrite fc
+ 0070           ;              a -> R10
+ 0070           ;              i -> R20,R21
+ 0070           ;            Len -> y+6
+ 0070           ;            Dat -> R10,R11
+ 0070           ;      PageIndex -> R18,R19
+ 0070           ;          Shift -> R16,R17
+                        .even
+ 0070           _FlashDataWrite::
+ 0070 0E940000          xcall push_xgset300C
+ 0074 AC80              ldd R10,y+4
+ 0076 BD80              ldd R11,y+5
+ 0078                   .dbline -1
+ 0078                   .dbline 57
+ 0078           ; }
+ 0078           ; 
+ 0078           ; unsigned char FlashDataWrite(unsigned int Shift,unsigned int PageIndex,volatile unsigned char * Dat,unsigned int Len)
+ 0078           ; {unsigned int i;
+ 0078                   .dbline 59
+ 0078           ;  unsigned char a;
+ 0078           ;  COM_W(Shift>>8)       //页编程起始地址
+ 0078                   .dbline 59
+ 0078 8FEF              ldi R24,255
+ 007A 8ABB              out 0x1a,R24
+ 007C                   .dbline 59
+ 007C 1801              movw R2,R16
+ 007E 232C              mov R2,R3
+ 0080 3324              clr R3
+ 0082 2BBA              out 0x1b,R2
+ 0084                   .dbline 59
+ 0084 8BEE              ldi R24,235
+ 0086 85BB              out 0x15,R24
+ 0088                   .dbline 59
+ 0088 8BEC              ldi R24,203
+ 008A 85BB              out 0x15,R24
+ 008C                   .dbline 59
+ 008C 8BEE              ldi R24,235
+ 008E 85BB              out 0x15,R24
+ 0090                   .dbline 59
+ 0090                   .dbline 60
+ 0090           ;  COM_W(0x80)           //页编程开始命令
+ 0090                   .dbline 60
+ 0090 8FEF              ldi R24,255
+ 0092 8ABB              out 0x1a,R24
+ 0094                   .dbline 60
+ 0094 80E8              ldi R24,128
+ 0096 8BBB              out 0x1b,R24
+ 0098                   .dbline 60
+ 0098 8BEE              ldi R24,235
+ 009A 85BB              out 0x15,R24
+ 009C                   .dbline 60
+ 009C 8BEC              ldi R24,203
+ 009E 85BB              out 0x15,R24
+ 00A0                   .dbline 60
+ 00A0 8BEE              ldi R24,235
+ 00A2 85BB              out 0x15,R24
+ 00A4                   .dbline 60
+ 00A4                   .dbline 61
+ 00A4           ;  ADD_W(Shift)          //页内偏移
+ 00A4                   .dbline 61
+ 00A4 8FEF              ldi R24,255
+ 00A6 8ABB              out 0x1a,R24
+ 00A8                   .dbline 61
+ 00A8 0BBB              out 0x1b,R16
+ 00AA                   .dbline 61
+ 00AA 83EF              ldi R24,243
+ 00AC 85BB              out 0x15,R24
+ 00AE                   .dbline 61
+ 00AE 83ED              ldi R24,211
+ 00B0 85BB              out 0x15,R24
+ 00B2                   .dbline 61
+ 00B2 83EF              ldi R24,243
+ 00B4 85BB              out 0x15,R24
+ 00B6                   .dbline 61
+ 00B6                   .dbline 62
+ 00B6           ;  ADD_W(PageIndex)      //页索引地址低
+ 00B6                   .dbline 62
+ 00B6 8FEF              ldi R24,255
+ 00B8 8ABB              out 0x1a,R24
+ 00BA                   .dbline 62
+ 00BA 2BBB              out 0x1b,R18
+ 00BC                   .dbline 62
+ 00BC 83EF              ldi R24,243
+ 00BE 85BB              out 0x15,R24
+ 00C0                   .dbline 62
+ 00C0 83ED              ldi R24,211
+ 00C2 85BB              out 0x15,R24
+ 00C4                   .dbline 62
+ 00C4 83EF              ldi R24,243
+ 00C6 85BB              out 0x15,R24
+ 00C8                   .dbline 62
+ 00C8                   .dbline 63
+ 00C8           ;  ADD_W(PageIndex>>8)   //页索引地址高
+ 00C8                   .dbline 63
+ 00C8 8FEF              ldi R24,255
+ 00CA 8ABB              out 0x1a,R24
+ 00CC                   .dbline 63
+ 00CC 1901              movw R2,R18
+ 00CE 232C              mov R2,R3
+ 00D0 3324              clr R3
+ 00D2 2BBA              out 0x1b,R2
+ 00D4                   .dbline 63
+ 00D4 83EF              ldi R24,243
+ 00D6 85BB              out 0x15,R24
+ 00D8                   .dbline 63
+ 00D8 83ED              ldi R24,211
+ 00DA 85BB              out 0x15,R24
+ 00DC                   .dbline 63
+ 00DC 83EF              ldi R24,243
+ 00DE 85BB              out 0x15,R24
+ 00E0                   .dbline 63
+ 00E0                   .dbline 64
+ 00E0           ;  BUSY
+ 00E0 0000              nop
+ 00E2                   .dbline 64
+ 00E2 0000              nop
+ 00E4                   .dbline 64
+ 00E4 0000              nop
+ 00E6           L3:
+ 00E6                   .dbline 64
+ 00E6           L4:
+ 00E6                   .dbline 64
+ 00E6 989B              sbis 0x13,0
+ 00E8 FECF              rjmp L3
+ 00EA           X0:
+ 00EA                   .dbline 67
+ 00EA           ;  
+ 00EA           ; 
+ 00EA           ;  for(i=0;i<Len;i++)
+ 00EA 4427              clr R20
+ 00EC 5527              clr R21
+ 00EE 0EC0              xjmp L9
+ 00F0           L6:
+ 00F0                   .dbline 68
+ 00F0           ;  {DATA_W(*Dat++)
+ 00F0                   .dbline 68
+ 00F0                   .dbline 68
+ 00F0 8FEF              ldi R24,255
+ 00F2 8ABB              out 0x1a,R24
+ 00F4                   .dbline 68
+ 00F4 F501              movw R30,R10
+ 00F6 2190              ld R2,Z+
+ 00F8 5F01              movw R10,R30
+ 00FA 2BBA              out 0x1b,R2
+ 00FC                   .dbline 68
+ 00FC 83EE              ldi R24,227
+ 00FE 85BB              out 0x15,R24
+ 0100                   .dbline 68
+ 0100 83EC              ldi R24,195
+ 0102 85BB              out 0x15,R24
+ 0104                   .dbline 68
+ 0104 83EE              ldi R24,227
+ 0106 85BB              out 0x15,R24
+ 0108                   .dbline 68
+ 0108                   .dbline 69
+ 0108           ;  }
+ 0108           L7:
+ 0108                   .dbline 67
+ 0108 4F5F              subi R20,255  ; offset = 1
+ 010A 5F4F              sbci R21,255
+ 010C           L9:
+ 010C                   .dbline 67
+ 010C 0E80              ldd R0,y+6
+ 010E 1F80              ldd R1,y+7
+ 0110 4015              cp R20,R0
+ 0112 5105              cpc R21,R1
+ 0114 68F3              brlo L6
+ 0116           X1:
+ 0116                   .dbline 70
+ 0116           ;  COM_W(0x10)
+ 0116                   .dbline 70
+ 0116 8FEF              ldi R24,255
+ 0118 8ABB              out 0x1a,R24
+ 011A                   .dbline 70
+ 011A 80E1              ldi R24,16
+ 011C 8BBB              out 0x1b,R24
+ 011E                   .dbline 70
+ 011E 8BEE              ldi R24,235
+ 0120 85BB              out 0x15,R24
+ 0122                   .dbline 70
+ 0122 8BEC              ldi R24,203
+ 0124 85BB              out 0x15,R24
+ 0126                   .dbline 70
+ 0126 8BEE              ldi R24,235
+ 0128 85BB              out 0x15,R24
+ 012A                   .dbline 70
+ 012A                   .dbline 71
+ 012A           ;  BUSY
+ 012A 0000              nop
+ 012C                   .dbline 71
+ 012C 0000              nop
+ 012E                   .dbline 71
+ 012E 0000              nop
+ 0130           L10:
+ 0130                   .dbline 71
+ 0130           L11:
+ 0130                   .dbline 71
+ 0130 989B              sbis 0x13,0
+ 0132 FECF              rjmp L10
+ 0134           X2:
+ 0134                   .dbline 73
+ 0134           ;  
+ 0134           ;  COM_W(0x70)
+ 0134                   .dbline 73
+ 0134 8FEF              ldi R24,255
+ 0136 8ABB              out 0x1a,R24
+ 0138                   .dbline 73
+ 0138 80E7              ldi R24,112
+ 013A 8BBB              out 0x1b,R24
+ 013C                   .dbline 73
+ 013C 8BEE              ldi R24,235
+ 013E 85BB              out 0x15,R24
+ 0140                   .dbline 73
+ 0140 8BEC              ldi R24,203
+ 0142 85BB              out 0x15,R24
+ 0144                   .dbline 73
+ 0144 8BEE              ldi R24,235
+ 0146 85BB              out 0x15,R24
+ 0148                   .dbline 73
+ 0148                   .dbline 74
+ 0148           ;  DATA_R(a)
+ 0148                   .dbline 74
+ 0148 2224              clr R2
+ 014A 2ABA              out 0x1a,R2
+ 014C                   .dbline 74
+ 014C 8FEF              ldi R24,255
+ 014E 8BBB              out 0x1b,R24
+ 0150                   .dbline 74
+ 0150 83EE              ldi R24,227
+ 0152 85BB              out 0x15,R24
+ 0154                   .dbline 74
+ 0154 81EE              ldi R24,225
+ 0156 85BB              out 0x15,R24
+ 0158                   .dbline 74
+ 0158 85BB              out 0x15,R24
+ 015A                   .dbline 74
+ 015A 85BB              out 0x15,R24
+ 015C                   .dbline 74
+ 015C A9B2              in R10,0x19
+ 015E                   .dbline 74
+ 015E 83EE              ldi R24,227
+ 0160 85BB              out 0x15,R24
+ 0162                   .dbline 74
+ 0162                   .dbline 76
+ 0162           ; 
+ 0162           ;  CS_OFF
+ 0162 85B3              in R24,0x15
+ 0164 876E              ori R24,231
+ 0166 85BB              out 0x15,R24
+ 0168                   .dbline 78
+ 0168           ; 
+ 0168           ;  if((a&0x01)==0)
+ 0168 A0FC              sbrc R10,0
+ 016A 02C0              rjmp L13
+ 016C           X3:
+ 016C                   .dbline 79
+ 016C           ;   return 0;    //页编程成功
+ 016C 0027              clr R16
+ 016E 01C0              xjmp L2
+ 0170           L13:
+ 0170                   .dbline 81
+ 0170           ;  else
+ 0170           ;   return 1;   //页编程失败
+ 0170 01E0              ldi R16,1
+ 0172                   .dbline -2
+ 0172           L2:
+ 0172                   .dbline 0 ; func end
+ 0172 0C940000          xjmp pop_xgset300C
+ 0176                   .dbsym r a 10 c
+ 0176                   .dbsym r i 20 i
+ 0176                   .dbsym l Len 6 i
+ 0176                   .dbsym r Dat 10 pc
+ 0176                   .dbsym r PageIndex 18 i
+ 0176                   .dbsym r Shift 16 i
+ 0176                   .dbend
+ 0176                   .dbfunc e FlashDataRead _FlashDataRead fV
+ 0176           ;              i -> R20,R21
+ 0176           ;            Len -> y+6
+ 0176           ;            Dat -> R10,R11
+ 0176           ;      PageIndex -> R18,R19
+ 0176           ;          Shift -> R16,R17
+                        .even
+ 0176           _FlashDataRead::
+ 0176 0E940000          xcall push_xgset300C
+ 017A AC80              ldd R10,y+4
+ 017C BD80              ldd R11,y+5
+ 017E                   .dbline -1
+ 017E                   .dbline 86
+ 017E           ; }
+ 017E           ; 
+ 017E           ; 
+ 017E           ; void FlashDataRead(unsigned int Shift,unsigned int PageIndex,unsigned char * Dat,unsigned int Len)
+ 017E           ; {unsigned int i;
+ 017E                   .dbline 87
+ 017E           ;  COM_W(Shift>>8)//读命令，分二种情况
+ 017E                   .dbline 87
+ 017E 8FEF              ldi R24,255
+ 0180 8ABB              out 0x1a,R24
+ 0182                   .dbline 87
+ 0182 1801              movw R2,R16
+ 0184 232C              mov R2,R3
+ 0186 3324              clr R3
+ 0188 2BBA              out 0x1b,R2
+ 018A                   .dbline 87
+ 018A 8BEE              ldi R24,235
+ 018C 85BB              out 0x15,R24
+ 018E                   .dbline 87
+ 018E 8BEC              ldi R24,203
+ 0190 85BB              out 0x15,R24
+ 0192                   .dbline 87
+ 0192 8BEE              ldi R24,235
+ 0194 85BB              out 0x15,R24
+ 0196                   .dbline 87
+ 0196                   .dbline 88
+ 0196           ;  ADD_W(Shift) //页内偏移
+ 0196                   .dbline 88
+ 0196 8FEF              ldi R24,255
+ 0198 8ABB              out 0x1a,R24
+ 019A                   .dbline 88
+ 019A 0BBB              out 0x1b,R16
+ 019C                   .dbline 88
+ 019C 83EF              ldi R24,243
+ 019E 85BB              out 0x15,R24
+ 01A0                   .dbline 88
+ 01A0 83ED              ldi R24,211
+ 01A2 85BB              out 0x15,R24
+ 01A4                   .dbline 88
+ 01A4 83EF              ldi R24,243
+ 01A6 85BB              out 0x15,R24
+ 01A8                   .dbline 88
+ 01A8                   .dbline 89
+ 01A8           ;  ADD_W(PageIndex) //页索引低地址
+ 01A8                   .dbline 89
+ 01A8 8FEF              ldi R24,255
+ 01AA 8ABB              out 0x1a,R24
+ 01AC                   .dbline 89
+ 01AC 2BBB              out 0x1b,R18
+ 01AE                   .dbline 89
+ 01AE 83EF              ldi R24,243
+ 01B0 85BB              out 0x15,R24
+ 01B2                   .dbline 89
+ 01B2 83ED              ldi R24,211
+ 01B4 85BB              out 0x15,R24
+ 01B6                   .dbline 89
+ 01B6 83EF              ldi R24,243
+ 01B8 85BB              out 0x15,R24
+ 01BA                   .dbline 89
+ 01BA                   .dbline 90
+ 01BA           ;  ADD_W(PageIndex>>8) //页索引高地址
+ 01BA                   .dbline 90
+ 01BA 8FEF              ldi R24,255
+ 01BC 8ABB              out 0x1a,R24
+ 01BE                   .dbline 90
+ 01BE 1901              movw R2,R18
+ 01C0 232C              mov R2,R3
+ 01C2 3324              clr R3
+ 01C4 2BBA              out 0x1b,R2
+ 01C6                   .dbline 90
+ 01C6 83EF              ldi R24,243
+ 01C8 85BB              out 0x15,R24
+ 01CA                   .dbline 90
+ 01CA 83ED              ldi R24,211
+ 01CC 85BB              out 0x15,R24
+ 01CE                   .dbline 90
+ 01CE 83EF              ldi R24,243
+ 01D0 85BB              out 0x15,R24
+ 01D2                   .dbline 90
+ 01D2                   .dbline 93
+ 01D2           ;  
+ 01D2           ;  // delay(10);
+ 01D2           ;   BUSY
+ 01D2 0000              nop
+ 01D4                   .dbline 93
+ 01D4 0000              nop
+ 01D6                   .dbline 93
+ 01D6 0000              nop
+ 01D8           L16:
+ 01D8                   .dbline 93
+ 01D8           L17:
+ 01D8                   .dbline 93
+ 01D8 989B              sbis 0x13,0
+ 01DA FECF              rjmp L16
+ 01DC           X4:
+ 01DC                   .dbline 94
+ 01DC           ;   for(i=0;i<Len;i++) 
+ 01DC 4427              clr R20
+ 01DE 5527              clr R21
+ 01E0 12C0              xjmp L22
+ 01E2           L19:
+ 01E2                   .dbline 95
+ 01E2           ;    {DATA_R(*Dat++)
+ 01E2                   .dbline 95
+ 01E2                   .dbline 95
+ 01E2 2224              clr R2
+ 01E4 2ABA              out 0x1a,R2
+ 01E6                   .dbline 95
+ 01E6 8FEF              ldi R24,255
+ 01E8 8BBB              out 0x1b,R24
+ 01EA                   .dbline 95
+ 01EA 83EE              ldi R24,227
+ 01EC 85BB              out 0x15,R24
+ 01EE                   .dbline 95
+ 01EE 81EE              ldi R24,225
+ 01F0 85BB              out 0x15,R24
+ 01F2                   .dbline 95
+ 01F2 85BB              out 0x15,R24
+ 01F4                   .dbline 95
+ 01F4 85BB              out 0x15,R24
+ 01F6                   .dbline 95
+ 01F6 29B2              in R2,0x19
+ 01F8 F501              movw R30,R10
+ 01FA 2192              st Z+,R2
+ 01FC 5F01              movw R10,R30
+ 01FE                   .dbline 95
+ 01FE 83EE              ldi R24,227
+ 0200 85BB              out 0x15,R24
+ 0202                   .dbline 95
+ 0202                   .dbline 96
+ 0202           ;    }
+ 0202           L20:
+ 0202                   .dbline 94
+ 0202 4F5F              subi R20,255  ; offset = 1
+ 0204 5F4F              sbci R21,255
+ 0206           L22:
+ 0206                   .dbline 94
+ 0206 0E80              ldd R0,y+6
+ 0208 1F80              ldd R1,y+7
+ 020A 4015              cp R20,R0
+ 020C 5105              cpc R21,R1
+ 020E 48F3              brlo L19
+ 0210           X5:
+ 0210                   .dbline 98
+ 0210           ;    
+ 0210           ;    CS_OFF
+ 0210 85B3              in R24,0x15
+ 0212 876E              ori R24,231
+ 0214 85BB              out 0x15,R24
+ 0216                   .dbline -2
+ 0216           L15:
+ 0216                   .dbline 0 ; func end
+ 0216 0C940000          xjmp pop_xgset300C
+ 021A                   .dbsym r i 20 i
+ 021A                   .dbsym l Len 6 i
+ 021A                   .dbsym r Dat 10 pc
+ 021A                   .dbsym r PageIndex 18 i
+ 021A                   .dbsym r Shift 16 i
+ 021A                   .dbend
+ 021A                   .dbfunc e EraseBlock _EraseBlock fc
+ 021A           ;              i -> <dead>
+ 021A           ;              b -> R12
+ 021A           ;              a -> R10
+ 021A           ;          Index -> R12,R13
+                        .even
+ 021A           _EraseBlock::
+ 021A 0E940000          xcall push_xgset003C
+ 021E 6801              movw R12,R16
+ 0220                   .dbline -1
+ 0220                   .dbline 105
+ 0220           ; }
+ 0220           ; 
+ 0220           ; 
+ 0220           ; 
+ 0220           ; 
+ 0220           ; unsigned char EraseBlock(unsigned int Index)
+ 0220           ; {unsigned char a,b;
+ 0220                   .dbline 107
+ 0220           ;  unsigned int i;
+ 0220           ;  Index*=32;
+ 0220 00E2              ldi R16,32
+ 0222 10E0              ldi R17,0
+ 0224 9601              movw R18,R12
+ 0226 0E940000          xcall empy16s
+ 022A 6801              movw R12,R16
+ 022C                   .dbline 108
+ 022C           ;  a=Index;
+ 022C AC2C              mov R10,R12
+ 022E                   .dbline 109
+ 022E           ;  b=Index>>8;
+ 022E CD2C              mov R12,R13
+ 0230 DD24              clr R13
+ 0232                   .dbline 110
+ 0232           ;  COM_W(0x60)
+ 0232                   .dbline 110
+ 0232 8FEF              ldi R24,255
+ 0234 8ABB              out 0x1a,R24
+ 0236                   .dbline 110
+ 0236 80E6              ldi R24,96
+ 0238 8BBB              out 0x1b,R24
+ 023A                   .dbline 110
+ 023A 8BEE              ldi R24,235
+ 023C 85BB              out 0x15,R24
+ 023E                   .dbline 110
+ 023E 8BEC              ldi R24,203
+ 0240 85BB              out 0x15,R24
+ 0242                   .dbline 110
+ 0242 8BEE              ldi R24,235
+ 0244 85BB              out 0x15,R24
+ 0246                   .dbline 110
+ 0246                   .dbline 111
+ 0246           ;  ADD_W(a)
+ 0246                   .dbline 111
+ 0246 8FEF              ldi R24,255
+ 0248 8ABB              out 0x1a,R24
+ 024A                   .dbline 111
+ 024A 0BBB              out 0x1b,R16
+ 024C                   .dbline 111
+ 024C 83EF              ldi R24,243
+ 024E 85BB              out 0x15,R24
+ 0250                   .dbline 111
+ 0250 83ED              ldi R24,211
+ 0252 85BB              out 0x15,R24
+ 0254                   .dbline 111
+ 0254 83EF              ldi R24,243
+ 0256 85BB              out 0x15,R24
+ 0258                   .dbline 111
+ 0258                   .dbline 112
+ 0258           ;  ADD_W(b)
+ 0258                   .dbline 112
+ 0258 8FEF              ldi R24,255
+ 025A 8ABB              out 0x1a,R24
+ 025C                   .dbline 112
+ 025C CBBA              out 0x1b,R12
+ 025E                   .dbline 112
+ 025E 83EF              ldi R24,243
+ 0260 85BB              out 0x15,R24
+ 0262                   .dbline 112
+ 0262 83ED              ldi R24,211
+ 0264 85BB              out 0x15,R24
+ 0266                   .dbline 112
+ 0266 83EF              ldi R24,243
+ 0268 85BB              out 0x15,R24
+ 026A                   .dbline 112
+ 026A                   .dbline 113
+ 026A           ;  COM_W(0xd0)
+ 026A                   .dbline 113
+ 026A 8FEF              ldi R24,255
+ 026C 8ABB              out 0x1a,R24
+ 026E                   .dbline 113
+ 026E 80ED              ldi R24,208
+ 0270 8BBB              out 0x1b,R24
+ 0272                   .dbline 113
+ 0272 8BEE              ldi R24,235
+ 0274 85BB              out 0x15,R24
+ 0276                   .dbline 113
+ 0276 8BEC              ldi R24,203
+ 0278 85BB              out 0x15,R24
+ 027A                   .dbline 113
+ 027A 8BEE              ldi R24,235
+ 027C 85BB              out 0x15,R24
+ 027E                   .dbline 113
+ 027E                   .dbline 115
+ 027E           ;  
+ 027E           ;  BUSY
+ 027E 0000              nop
+ 0280                   .dbline 115
+ 0280 0000              nop
+ 0282                   .dbline 115
+ 0282 0000              nop
+ 0284           L24:
+ 0284                   .dbline 115
+ 0284           L25:
+ 0284                   .dbline 115
+ 0284 989B              sbis 0x13,0
+ 0286 FECF              rjmp L24
+ 0288           X6:
+ 0288                   .dbline 117
+ 0288           ;  
+ 0288           ;  COM_W(0x70)
+ 0288                   .dbline 117
+ 0288 8FEF              ldi R24,255
+ 028A 8ABB              out 0x1a,R24
+ 028C                   .dbline 117
+ 028C 80E7              ldi R24,112
+ 028E 8BBB              out 0x1b,R24
+ 0290                   .dbline 117
+ 0290 8BEE              ldi R24,235
+ 0292 85BB              out 0x15,R24
+ 0294                   .dbline 117
+ 0294 8BEC              ldi R24,203
+ 0296 85BB              out 0x15,R24
+ 0298                   .dbline 117
+ 0298 8BEE              ldi R24,235
+ 029A 85BB              out 0x15,R24
+ 029C                   .dbline 117
+ 029C                   .dbline 118
+ 029C           ;  DATA_R(a)
+ 029C                   .dbline 118
+ 029C 2224              clr R2
+ 029E 2ABA              out 0x1a,R2
+ 02A0                   .dbline 118
+ 02A0 8FEF              ldi R24,255
+ 02A2 8BBB              out 0x1b,R24
+ 02A4                   .dbline 118
+ 02A4 83EE              ldi R24,227
+ 02A6 85BB              out 0x15,R24
+ 02A8                   .dbline 118
+ 02A8 81EE              ldi R24,225
+ 02AA 85BB              out 0x15,R24
+ 02AC                   .dbline 118
+ 02AC 85BB              out 0x15,R24
+ 02AE                   .dbline 118
+ 02AE 85BB              out 0x15,R24
+ 02B0                   .dbline 118
+ 02B0 A9B2              in R10,0x19
+ 02B2                   .dbline 118
+ 02B2 83EE              ldi R24,227
+ 02B4 85BB              out 0x15,R24
+ 02B6                   .dbline 118
+ 02B6                   .dbline 119
+ 02B6           ;  CS_OFF
+ 02B6 85B3              in R24,0x15
+ 02B8 876E              ori R24,231
+ 02BA 85BB              out 0x15,R24
+ 02BC                   .dbline 121
+ 02BC           ;  
+ 02BC           ;  if((a&0x01)==0)
+ 02BC A0FC              sbrc R10,0
+ 02BE 02C0              rjmp L27
+ 02C0           X7:
+ 02C0                   .dbline 122
+ 02C0           ;   return 0;      //页编程成功
+ 02C0 0027              clr R16
+ 02C2 01C0              xjmp L23
+ 02C4           L27:
+ 02C4                   .dbline 124
+ 02C4           ;  else
+ 02C4           ;   return 1;    //页编程失败
+ 02C4 01E0              ldi R16,1
+ 02C6                   .dbline -2
+ 02C6           L23:
+ 02C6                   .dbline 0 ; func end
+ 02C6 0C940000          xjmp pop_xgset003C
+ 02CA                   .dbsym l i 1 i
+ 02CA                   .dbsym r b 12 c
+ 02CA                   .dbsym r a 10 c
+ 02CA                   .dbsym r Index 12 i
+ 02CA                   .dbend
+ 02CA                   .dbfunc e FlashDataWrite2 _FlashDataWrite2 fc
+ 02CA           ;              a -> R10
+ 02CA           ;              i -> R20,R21
+ 02CA           ;            Len -> y+6
+ 02CA           ;            Dat -> R10,R11
+ 02CA           ;      PageIndex -> R18,R19
+ 02CA           ;          Shift -> R16,R17
+                        .even
+ 02CA           _FlashDataWrite2::
+ 02CA 0E940000          xcall push_xgset300C
+ 02CE AC80              ldd R10,y+4
+ 02D0 BD80              ldd R11,y+5
+ 02D2                   .dbline -1
+ 02D2                   .dbline 130
+ 02D2           ; }
+ 02D2           ; 
+ 02D2           ; 
+ 02D2           ; 
+ 02D2           ; unsigned char FlashDataWrite2(unsigned int Shift,unsigned int PageIndex,const unsigned char * Dat,unsigned int Len)
+ 02D2           ; {unsigned int i;
+ 02D2                   .dbline 132
+ 02D2           ;  unsigned char a;
+ 02D2           ;  COM_W(Shift>>8)       //页编程起始地址
+ 02D2                   .dbline 132
+ 02D2 8FEF              ldi R24,255
+ 02D4 8ABB              out 0x1a,R24
+ 02D6                   .dbline 132
+ 02D6 1801              movw R2,R16
+ 02D8 232C              mov R2,R3
+ 02DA 3324              clr R3
+ 02DC 2BBA              out 0x1b,R2
+ 02DE                   .dbline 132
+ 02DE 8BEE              ldi R24,235
+ 02E0 85BB              out 0x15,R24
+ 02E2                   .dbline 132
+ 02E2 8BEC              ldi R24,203
+ 02E4 85BB              out 0x15,R24
+ 02E6                   .dbline 132
+ 02E6 8BEE              ldi R24,235
+ 02E8 85BB              out 0x15,R24
+ 02EA                   .dbline 132
+ 02EA                   .dbline 133
+ 02EA           ;  COM_W(0x80)           //页编程开始命令
+ 02EA                   .dbline 133
+ 02EA 8FEF              ldi R24,255
+ 02EC 8ABB              out 0x1a,R24
+ 02EE                   .dbline 133
+ 02EE 80E8              ldi R24,128
+ 02F0 8BBB              out 0x1b,R24
+ 02F2                   .dbline 133
+ 02F2 8BEE              ldi R24,235
+ 02F4 85BB              out 0x15,R24
+ 02F6                   .dbline 133
+ 02F6 8BEC              ldi R24,203
+ 02F8 85BB              out 0x15,R24
+ 02FA                   .dbline 133
+ 02FA 8BEE              ldi R24,235
+ 02FC 85BB              out 0x15,R24
+ 02FE                   .dbline 133
+ 02FE                   .dbline 134
+ 02FE           ;  ADD_W(Shift)          //页内偏移
+ 02FE                   .dbline 134
+ 02FE 8FEF              ldi R24,255
+ 0300 8ABB              out 0x1a,R24
+ 0302                   .dbline 134
+ 0302 0BBB              out 0x1b,R16
+ 0304                   .dbline 134
+ 0304 83EF              ldi R24,243
+ 0306 85BB              out 0x15,R24
+ 0308                   .dbline 134
+ 0308 83ED              ldi R24,211
+ 030A 85BB              out 0x15,R24
+ 030C                   .dbline 134
+ 030C 83EF              ldi R24,243
+ 030E 85BB              out 0x15,R24
+ 0310                   .dbline 134
+ 0310                   .dbline 135
+ 0310           ;  ADD_W(PageIndex)      //页索引地址低
+ 0310                   .dbline 135
+ 0310 8FEF              ldi R24,255
+ 0312 8ABB              out 0x1a,R24
+ 0314                   .dbline 135
+ 0314 2BBB              out 0x1b,R18
+ 0316                   .dbline 135
+ 0316 83EF              ldi R24,243
+ 0318 85BB              out 0x15,R24
+ 031A                   .dbline 135
+ 031A 83ED              ldi R24,211
+ 031C 85BB              out 0x15,R24
+ 031E                   .dbline 135
+ 031E 83EF              ldi R24,243
+ 0320 85BB              out 0x15,R24
+ 0322                   .dbline 135
+ 0322                   .dbline 136
+ 0322           ;  ADD_W(PageIndex>>8)   //页索引地址高
+ 0322                   .dbline 136
+ 0322 8FEF              ldi R24,255
+ 0324 8ABB              out 0x1a,R24
+ 0326                   .dbline 136
+ 0326 1901              movw R2,R18
+ 0328 232C              mov R2,R3
+ 032A 3324              clr R3
+ 032C 2BBA              out 0x1b,R2
+ 032E                   .dbline 136
+ 032E 83EF              ldi R24,243
+ 0330 85BB              out 0x15,R24
+ 0332                   .dbline 136
+ 0332 83ED              ldi R24,211
+ 0334 85BB              out 0x15,R24
+ 0336                   .dbline 136
+ 0336 83EF              ldi R24,243
+ 0338 85BB              out 0x15,R24
+ 033A                   .dbline 136
+ 033A                   .dbline 138
+ 033A           ;  
+ 033A           ;  BUSY
+ 033A 0000              nop
+ 033C                   .dbline 138
+ 033C 0000              nop
+ 033E                   .dbline 138
+ 033E 0000              nop
+ 0340           L30:
+ 0340                   .dbline 138
+ 0340           L31:
+ 0340                   .dbline 138
+ 0340 989B              sbis 0x13,0
+ 0342 FECF              rjmp L30
+ 0344           X8:
+ 0344                   .dbline 140
+ 0344           ;  
+ 0344           ;  DDRA=0xff;
+ 0344 8FEF              ldi R24,255
+ 0346 8ABB              out 0x1a,R24
+ 0348                   .dbline 141
+ 0348           ;  for(i=0;i<Len;i++)
+ 0348 4427              clr R20
+ 034A 5527              clr R21
+ 034C 0CC0              xjmp L36
+ 034E           L33:
+ 034E                   .dbline 142
+ 034E           ;  {
+ 034E                   .dbline 143
+ 034E           ;  PORTA=*Dat++;
+ 034E F501              movw R30,R10
+ 0350 2190              ld R2,Z+
+ 0352 5F01              movw R10,R30
+ 0354 2BBA              out 0x1b,R2
+ 0356                   .dbline 144
+ 0356           ;  PORTC=0xe3;
+ 0356 83EE              ldi R24,227
+ 0358 85BB              out 0x15,R24
+ 035A                   .dbline 145
+ 035A           ;  PORTC=0xc3;
+ 035A 83EC              ldi R24,195
+ 035C 85BB              out 0x15,R24
+ 035E                   .dbline 146
+ 035E           ;  PORTC=0xe3;
+ 035E 83EE              ldi R24,227
+ 0360 85BB              out 0x15,R24
+ 0362                   .dbline 147
+ 0362           ;  }
+ 0362           L34:
+ 0362                   .dbline 141
+ 0362 4F5F              subi R20,255  ; offset = 1
+ 0364 5F4F              sbci R21,255
+ 0366           L36:
+ 0366                   .dbline 141
+ 0366 0E80              ldd R0,y+6
+ 0368 1F80              ldd R1,y+7
+ 036A 4015              cp R20,R0
+ 036C 5105              cpc R21,R1
+ 036E 78F3              brlo L33
+ 0370           X9:
+ 0370                   .dbline 148
+ 0370           ;  COM_W(0x10)
+ 0370                   .dbline 148
+ 0370 8FEF              ldi R24,255
+ 0372 8ABB              out 0x1a,R24
+ 0374                   .dbline 148
+ 0374 80E1              ldi R24,16
+ 0376 8BBB              out 0x1b,R24
+ 0378                   .dbline 148
+ 0378 8BEE              ldi R24,235
+ 037A 85BB              out 0x15,R24
+ 037C                   .dbline 148
+ 037C 8BEC              ldi R24,203
+ 037E 85BB              out 0x15,R24
+ 0380                   .dbline 148
+ 0380 8BEE              ldi R24,235
+ 0382 85BB              out 0x15,R24
+ 0384                   .dbline 148
+ 0384                   .dbline 150
+ 0384           ;  
+ 0384           ;  BUSY
+ 0384 0000              nop
+ 0386                   .dbline 150
+ 0386 0000              nop
+ 0388                   .dbline 150
+ 0388 0000              nop
+ 038A           L37:
+ 038A                   .dbline 150
+ 038A           L38:
+ 038A                   .dbline 150
+ 038A 989B              sbis 0x13,0
+ 038C FECF              rjmp L37
+ 038E           X10:
+ 038E                   .dbline 152
+ 038E           ;  
+ 038E           ;  COM_W(0x70)
+ 038E                   .dbline 152
+ 038E 8FEF              ldi R24,255
+ 0390 8ABB              out 0x1a,R24
+ 0392                   .dbline 152
+ 0392 80E7              ldi R24,112
+ 0394 8BBB              out 0x1b,R24
+ 0396                   .dbline 152
+ 0396 8BEE              ldi R24,235
+ 0398 85BB              out 0x15,R24
+ 039A                   .dbline 152
+ 039A 8BEC              ldi R24,203
+ 039C 85BB              out 0x15,R24
+ 039E                   .dbline 152
+ 039E 8BEE              ldi R24,235
+ 03A0 85BB              out 0x15,R24
+ 03A2                   .dbline 152
+ 03A2                   .dbline 153
+ 03A2           ;  DATA_R(a)
+ 03A2                   .dbline 153
+ 03A2 2224              clr R2
+ 03A4 2ABA              out 0x1a,R2
+ 03A6                   .dbline 153
+ 03A6 8FEF              ldi R24,255
+ 03A8 8BBB              out 0x1b,R24
+ 03AA                   .dbline 153
+ 03AA 83EE              ldi R24,227
+ 03AC 85BB              out 0x15,R24
+ 03AE                   .dbline 153
+ 03AE 81EE              ldi R24,225
+ 03B0 85BB              out 0x15,R24
+ 03B2                   .dbline 153
+ 03B2 85BB              out 0x15,R24
+ 03B4                   .dbline 153
+ 03B4 85BB              out 0x15,R24
+ 03B6                   .dbline 153
+ 03B6 A9B2              in R10,0x19
+ 03B8                   .dbline 153
+ 03B8 83EE              ldi R24,227
+ 03BA 85BB              out 0x15,R24
+ 03BC                   .dbline 153
+ 03BC                   .dbline 155
+ 03BC           ; 
+ 03BC           ;  CS_OFF
+ 03BC 85B3              in R24,0x15
+ 03BE 876E              ori R24,231
+ 03C0 85BB              out 0x15,R24
+ 03C2                   .dbline 157
+ 03C2           ;  
+ 03C2           ;  if((a&0x01)==0)
+ 03C2 A0FC              sbrc R10,0
+ 03C4 02C0              rjmp L40
+ 03C6           X11:
+ 03C6                   .dbline 158
+ 03C6           ;   return 0;    //页编程成功
+ 03C6 0027              clr R16
+ 03C8 01C0              xjmp L29
+ 03CA           L40:
+ 03CA                   .dbline 160
+ 03CA           ;  else
+ 03CA           ;   return 1;   //页编程失败
+ 03CA 01E0              ldi R16,1
+ 03CC                   .dbline -2
+ 03CC           L29:
+ 03CC                   .dbline 0 ; func end
+ 03CC 0C940000          xjmp pop_xgset300C
+ 03D0                   .dbsym r a 10 c
+ 03D0                   .dbsym r i 20 i
+ 03D0                   .dbsym l Len 6 i
+ 03D0                   .dbsym r Dat 10 pc
+ 03D0                   .dbsym r PageIndex 18 i
+ 03D0                   .dbsym r Shift 16 i
+ 03D0                   .dbend
+                        .area bss(ram, con, rel)
+ 0000                   .dbfile D:\Bikky\JDYQ\USB_Load\Flash.c
+ 0000           _num::
+ 0000                   .blkb 1
+ 0001                   .dbsym e num _num c
+ 0001           _well_counter::
+ 0001                   .blkb 1
+ 0002                   .dbsym e well_counter _well_counter c
+ 0002           _t::
+ 0002                   .blkb 8
+ 000A                   .dbsym e t _t A[8:8]c
+ 000A           _a::
+ 000A                   .blkb 1
+ 000B                   .dbsym e a _a c
+ 000B           _x::
+ 000B                   .blkb 1
+ 000C                   .dbsym e x _x c
+ 000C           _z::
+ 000C                   .blkb 1
+ 000D                   .dbsym e z _z c
+ 000D           ; }
+ 000D           ; 

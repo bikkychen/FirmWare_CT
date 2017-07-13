@@ -1,0 +1,4648 @@
+                        .module SBL.c
+                        .area text(rom, con, rel)
+ 0000                   .dbfile SBL.c
+                        .area data(ram, con, rel)
+ 0000                   .dbfile SBL.c
+ 0000           _address::
+ 0000                   .blkb 4
+                        .area idata
+ 0000 00000000          .word 0,0
+                        .area data(ram, con, rel)
+ 0004                   .dbfile SBL.c
+ 0004                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 0004                   .dbsym e address _address L
+                        .area text(rom, con, rel)
+ 0000                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 0000                   .dbfunc e boot_page_ew _boot_page_ew fV
+ 0000           ;           code -> R16
+ 0000           ;      p_address -> y+0
+                        .even
+ 0000           _boot_page_ew::
+ 0000 0E940000          xcall push_arg4
+ 0004 0C81              ldd R16,y+4
+ 0006                   .dbline -1
+ 0006                   .dbline 112
+ 0006           ; #include <iom128v.h>                                                                  
+ 0006           ; #include <macros.h>
+ 0006           ; #include <stdio.h>
+ 0006           ; 
+ 0006           ; //最后修订:20160812
+ 0006           ; //20170226 增加PIC单片机在线更新功能，另外还增加了一个引导区握手命令0xf0
+ 0006           ; 
+ 0006           ; #define  BB     0x00        //固件版本号
+ 0006           ; 
+ 0006           ; #define M1_L    PORTD&=0xfb;
+ 0006           ; #define M1_H    PORTD|=0x04;
+ 0006           ; #define M2_L    PORTD&=0xfd;
+ 0006           ; #define M2_H    PORTD|=0x02;
+ 0006           ;  
+ 0006           ;  //收放电机管脚定义和控制项
+ 0006           ; #define DIR1_PIN    ((PINA&0x04)>>2)
+ 0006           ; #define PWM1_PIN    ((PINA&0x02)>>1)
+ 0006           ; #define BREAKE1_PIN (PINA&0x01)
+ 0006           ; 
+ 0006           ; #define DIR1_H      {DDRA|=0x04;PORTA|=0x04;}
+ 0006           ; #define PWM1_H      {DDRA|=0x02;PORTA|=0x02;}
+ 0006           ; #define BREAKE1_H   {DDRA|=0x01;PORTA|=0x01;}
+ 0006           ; 
+ 0006           ; #define DIR1_L      {DDRA|=0x04;PORTA&=0xfb;}
+ 0006           ; #define PWM1_L      {DDRA|=0x02;PORTA&=0xFD;}
+ 0006           ; #define BREAKE1_L   {DDRA|=0x01;PORTA&=0xFE;}
+ 0006           ; 
+ 0006           ; //调节电机管脚定义和控制项
+ 0006           ; #define PWM2_PIN    ((PINF&0x04)>>2)
+ 0006           ; #define BREAKE2_PIN ((PINF&0x02)>>1)
+ 0006           ; #define DIR2_PIN    (PINF&0x01)
+ 0006           ; 
+ 0006           ; #define PWM2_H      {DDRF|=0x04;PORTF|=0x04;}
+ 0006           ; #define BREAKE2_H   {DDRF|=0x02;PORTF|=0x02;}
+ 0006           ; #define DIR2_H      {DDRF|=0x01;PORTF|=0x01;}
+ 0006           ; 
+ 0006           ; #define PWM2_L      {DDRF|=0x04;PORTF&=0xfb;}
+ 0006           ; #define BREAKE2_L   {DDRF|=0x02;PORTF&=0xFD;}
+ 0006           ; #define DIR2_L      {DDRF|=0x01;PORTF&=0xFE;}
+ 0006           ; 
+ 0006           ; //同时关二个电机，先把PWM置低，后把DIR和BREAK置低，最后关电机电源
+ 0006           ; #define MOTORSTOP   {DDRA|=0x07;PORTA&=0xFD;PORTA&=0xF8;   DDRF|=0x07;PORTF&=0xFB;PORTF&=0xF8;     DDRB|=0x80;PORTB&=0x7f;}
+ 0006           ; 
+ 0006           ; #define DELAY10 for(Tt=0;Tt<4;Tt++); 
+ 0006           ; #define DELAY20 for(Tt=0;Tt<8;Tt++); 
+ 0006           ; #define DELAY40 for(Tt=0;Tt<16;Tt++); 
+ 0006           ; #define DELAY50 for(Tt=0;Tt<21;Tt++); 
+ 0006           ; #define DELAY80 for(Tt=0;Tt<32;Tt++); 
+ 0006           ; #define DELAY89 for(Tt=0;Tt<36;Tt++); 
+ 0006           ; #define DELAY100 for(Tt=0;Tt<42;Tt++); 
+ 0006           ; #define DELAY200 for(Tt=0;Tt<84;Tt++); 
+ 0006           ; #define DELAY170 for(Tt=0;Tt<72;Tt++);
+ 0006           ; #define DELAY268 for(Tt=0;Tt<113;Tt++);
+ 0006           ; #define DELAY397 for(Tt=0;Tt<165;Tt++);
+ 0006           ; #define DELAY400 for(Tt=0;Tt<168;Tt++);
+ 0006           ;  
+ 0006           ; union MotorStatus
+ 0006           ; {
+ 0006           ;  unsigned int i;
+ 0006           ;  struct 
+ 0006           ;  { 
+ 0006           ;    unsigned int PWM:1;//bit0,电机运行状态，0：停止，1：运行
+ 0006           ;    unsigned int DIR:1;//bit1,电机运行方向，0：正向，1：反向
+ 0006           ;    unsigned int BrokenStop:1;//bit2, 断路停
+ 0006           ;    unsigned int CommandStop:1;//bit3,手动停
+ 0006           ;    unsigned int OverCurrent:1;//bit4,过流停
+ 0006           ;    unsigned int UnderVoltage:1;//bit5,欠压停
+ 0006           ;    unsigned int StartResult:2;//bit6-bit7,电机最近一次启动结果(0：正常上电启动，1：本电机同向运行，2：本电机反向运行，3：另一个电机正在运行)
+ 0006           ;    
+ 0006           ;    unsigned int ThisCurrent:8;//bit8-bit15 ,  电机当前或停止前最近一次电流
+ 0006           ;  }s;
+ 0006           ; }Motor1Status,Motor2Status;//电机状态
+ 0006           ; 
+ 0006           ; unsigned char Rx[18];//解码接收9位共18个半位
+ 0006           ; unsigned int  T_dat,R_dat;//曼码发送数据
+ 0006           ; unsigned char T_com;//曼码发送命令
+ 0006           ; unsigned char T_dat_buf[22];//曼码发送缓冲 
+ 0006           ; unsigned char Int_count;
+ 0006           ; unsigned char IntFlag;//接收帧状态
+ 0006           ;  
+ 0006           ; unsigned int Tt;
+ 0006           ; 
+ 0006           ; unsigned char UpdateBegin;//接收主程序数据开始标志
+ 0006           ; unsigned int DataReCn;
+ 0006           ; unsigned char crc16hi,crc16lo,DownloadSpeed;
+ 0006           ; unsigned int Timer3Cn;
+ 0006           ; unsigned char DSP_PageCn;//DSP程序页计数
+ 0006           ; 
+ 0006           ; unsigned char Uart0RxCounter;
+ 0006           ; unsigned char Uart0RxData[2];
+ 0006           ; unsigned int Timer0Counter;
+ 0006           ; unsigned char TimeOutFlag;
+ 0006           ; 
+ 0006           ; char flash_buf[258]; //FALSH页缓冲区,M128的一个Flash页为256字节(128字) //暂只支持64K地址编程
+ 0006           ; long address = 0; 
+ 0006           ; unsigned int T2cn;
+ 0006           ; 
+ 0006           ; void Start(void);
+ 0006           ; 
+ 0006           ; void SendManchester(void); 
+ 0006           ;  
+ 0006           ; void Delay30Ms();
+ 0006           ; 
+ 0006           ; //void EEPROM_write(unsigned int Address,unsigned char Data);
+ 0006           ; //unsigned char EEPROM_read(unsigned int Address) ;
+ 0006           ; 
+ 0006           ; 
+ 0006           ; 
+ 0006           ; 
+ 0006           ; //擦除(code=0x03)和写入(code=0x05)一个Flash页 
+ 0006           ; void boot_page_ew(long p_address,char code) 
+ 0006           ; { 
+ 0006                   .dbline 113
+ 0006           ;     asm("mov r30,r16\n" 
+ 0006 E02F              mov r30,r16
+ 0008 F12F              mov r31,r17
+ 000A 2BBF              out 0x3b,r18
+ 000C                   
+ 000C                   .dbline 116
+ 000C           ;         "mov r31,r17\n" 
+ 000C           ;         "out 0x3b,r18\n");            //将页地址放入Z寄存器和RAMPZ的Bit0中 
+ 000C           ;     SPMCSR = code;                //寄存器SPMCSR中为操作码 
+ 000C 00936800          sts 104,R16
+ 0010                   .dbline 117
+ 0010           ;     asm("spm\n");                    //对指定Flash页进行操作 
+ 0010 E895              spm
+ 0012                   
+ 0012                   .dbline -2
+ 0012           L2:
+ 0012                   .dbline 0 ; func end
+ 0012 2496              adiw R28,4
+ 0014 0895              ret
+ 0016                   .dbsym r code 16 c
+ 0016                   .dbsym l p_address 0 L
+ 0016                   .dbend
+ 0016                   .dbfunc e boot_page_fill _boot_page_fill fV
+ 0016           ;           data -> <dead>
+ 0016           ;        address -> <dead>
+                        .even
+ 0016           _boot_page_fill::
+ 0016 0E940000          xcall push_arg4
+ 001A                   .dbline -1
+ 001A                   .dbline 121
+ 001A           ; }         
+ 001A           ; //填充Flash缓冲页中的一个字 
+ 001A           ; void boot_page_fill(unsigned int address,int data) 
+ 001A           ; { 
+ 001A                   .dbline 122
+ 001A           ;     asm("mov r30,r16\n" 
+ 001A E02F              mov r30,r16
+ 001C F12F              mov r31,r17
+ 001E 022E              mov r0,r18
+ 0020 132E              mov r1,r19
+ 0022                   
+ 0022                   .dbline 126
+ 0022           ;         "mov r31,r17\n"             //Z寄存器中为填冲页内地址 
+ 0022           ;         "mov r0,r18\n" 
+ 0022           ;         "mov r1,r19\n");            //R0R1中为一个指令字 
+ 0022           ;     SPMCSR = 0x01; 
+ 0022 81E0              ldi R24,1
+ 0024 80936800          sts 104,R24
+ 0028                   .dbline 127
+ 0028           ;     asm("spm\n"); 
+ 0028 E895              spm
+ 002A                   
+ 002A                   .dbline -2
+ 002A           L3:
+ 002A                   .dbline 0 ; func end
+ 002A 2496              adiw R28,4
+ 002C 0895              ret
+ 002E                   .dbsym l data 2 I
+ 002E                   .dbsym l address 0 i
+ 002E                   .dbend
+ 002E                   .dbfunc e wait_page_rw_ok _wait_page_rw_ok fV
+                        .even
+ 002E           _wait_page_rw_ok::
+ 002E                   .dbline -1
+ 002E                   .dbline 131
+ 002E           ; } 
+ 002E           ; //等待一个Flash页的写完成 
+ 002E           ; void wait_page_rw_ok(void) 
+ 002E           ; { 
+ 002E 08C0              xjmp L6
+ 0030           L8:
+ 0030                   .dbline 134
+ 0030           ;       while(SPMCSR & 0x40) 
+ 0030           ;      { 
+ 0030           ;          while(SPMCSR & 0x01); 
+ 0030           L9:
+ 0030                   .dbline 134
+ 0030 20906800          lds R2,104
+ 0034 20FC              sbrc R2,0
+ 0036 FCCF              rjmp L8
+ 0038           X0:
+ 0038                   .dbline 135
+ 0038           ;          SPMCSR = 0x11; 
+ 0038 81E1              ldi R24,17
+ 003A 80936800          sts 104,R24
+ 003E                   .dbline 136
+ 003E           ;          asm("spm\n"); 
+ 003E E895              spm
+ 0040                   
+ 0040                   .dbline 137
+ 0040           ;      } 
+ 0040           L6:
+ 0040                   .dbline 132
+ 0040 20906800          lds R2,104
+ 0044 26FC              sbrc R2,6
+ 0046 F4CF              rjmp L9
+ 0048           X1:
+ 0048                   .dbline -2
+ 0048           L4:
+ 0048                   .dbline 0 ; func end
+ 0048 0895              ret
+ 004A                   .dbend
+ 004A                   .dbfunc e write_one_page _write_one_page fV
+ 004A           ;              i -> R20,R21
+                        .even
+ 004A           _write_one_page::
+ 004A 0E940000          xcall push_xgset300C
+ 004E 2197              sbiw R28,1
+ 0050                   .dbline -1
+ 0050                   .dbline 141
+ 0050           ; } 
+ 0050           ; //更新一个Flash页的完整处理 
+ 0050           ; void write_one_page(void) 
+ 0050           ; { 
+ 0050                   .dbline 143
+ 0050           ;     int i; 
+ 0050           ;     boot_page_ew(address,0x03);                    //擦除一个Flash页 
+ 0050 83E0              ldi R24,3
+ 0052 8883              std y+0,R24
+ 0054 20910200          lds R18,_address+2
+ 0058 30910300          lds R19,_address+2+1
+ 005C 00910000          lds R16,_address
+ 0060 10910100          lds R17,_address+1
+ 0064 CDDF              xcall _boot_page_ew
+ 0066                   .dbline 145
+ 0066           ;     
+ 0066           ;     wait_page_rw_ok();                            //等待擦除完成 
+ 0066 E3DF              xcall _wait_page_rw_ok
+ 0068                   .dbline 146
+ 0068           ;     for(i=0;i<256;i+=2)                //将数据填入Flash缓冲页中 
+ 0068 4427              clr R20
+ 006A 5527              clr R21
+ 006C           L12:
+ 006C                   .dbline 147
+ 006C           ;     { 
+ 006C                   .dbline 148
+ 006C           ;         boot_page_fill(i, flash_buf[i+2]+(flash_buf[i+3]<<8)); 
+ 006C 80E0              ldi R24,<_flash_buf+3
+ 006E 90E0              ldi R25,>_flash_buf+3
+ 0070 FA01              movw R30,R20
+ 0072 E80F              add R30,R24
+ 0074 F91F              adc R31,R25
+ 0076 2080              ldd R2,z+0
+ 0078 3324              clr R3
+ 007A 322C              mov R3,R2
+ 007C 2224              clr R2
+ 007E 80E0              ldi R24,<_flash_buf+2
+ 0080 90E0              ldi R25,>_flash_buf+2
+ 0082 FA01              movw R30,R20
+ 0084 E80F              add R30,R24
+ 0086 F91F              adc R31,R25
+ 0088 2081              ldd R18,z+0
+ 008A 3327              clr R19
+ 008C 220D              add R18,R2
+ 008E 331D              adc R19,R3
+ 0090 8A01              movw R16,R20
+ 0092 C1DF              xcall _boot_page_fill
+ 0094                   .dbline 149
+ 0094           ;     } 
+ 0094           L13:
+ 0094                   .dbline 146
+ 0094 4E5F              subi R20,254  ; offset = 2
+ 0096 5F4F              sbci R21,255
+ 0098                   .dbline 146
+ 0098 4030              cpi R20,0
+ 009A E1E0              ldi R30,1
+ 009C 5E07              cpc R21,R30
+ 009E 34F3              brlt L12
+ 00A0           X2:
+ 00A0                   .dbline 150
+ 00A0           ;     boot_page_ew(address,0x05);                    //将缓冲页数据写入一个Flash页 
+ 00A0 85E0              ldi R24,5
+ 00A2 8883              std y+0,R24
+ 00A4 20910200          lds R18,_address+2
+ 00A8 30910300          lds R19,_address+2+1
+ 00AC 00910000          lds R16,_address
+ 00B0 10910100          lds R17,_address+1
+ 00B4 A5DF              xcall _boot_page_ew
+ 00B6                   .dbline 153
+ 00B6           ;    
+ 00B6           ;    
+ 00B6           ;     wait_page_rw_ok();                            //等待写入完成 
+ 00B6 BBDF              xcall _wait_page_rw_ok
+ 00B8                   .dbline -2
+ 00B8           L11:
+ 00B8                   .dbline 0 ; func end
+ 00B8 2196              adiw R28,1
+ 00BA 0C940000          xjmp pop_xgset300C
+ 00BE                   .dbsym r i 20 I
+ 00BE                   .dbend
+ 00BE                   .dbfunc e InitialIO _InitialIO fV
+                        .even
+ 00BE           _InitialIO::
+ 00BE                   .dbline -1
+ 00BE                   .dbline 158
+ 00BE           ; }        
+ 00BE           ; 
+ 00BE           ; 
+ 00BE           ; void InitialIO(void)
+ 00BE           ; {//1输出，0输入
+ 00BE                   .dbline 159
+ 00BE           ;  PORTA=0x00;
+ 00BE 2224              clr R2
+ 00C0 2BBA              out 0x1b,R2
+ 00C2                   .dbline 160
+ 00C2           ;  DDRA=0x07; //PA0=BREAKE1 PA1=PWM1 PA2=DIR1
+ 00C2 87E0              ldi R24,7
+ 00C4 8ABB              out 0x1a,R24
+ 00C6                   .dbline 162
+ 00C6           ; 
+ 00C6           ;  PORTB=0x00; 
+ 00C6 28BA              out 0x18,R2
+ 00C8                   .dbline 163
+ 00C8           ;  DDRB=0x80; //PB7=VM_CTRL
+ 00C8 80E8              ldi R24,128
+ 00CA 87BB              out 0x17,R24
+ 00CC                   .dbline 165
+ 00CC           ;  
+ 00CC           ;  PORTC=0x00;
+ 00CC 25BA              out 0x15,R2
+ 00CE                   .dbline 166
+ 00CE           ;  DDRC=0x00; 
+ 00CE 24BA              out 0x14,R2
+ 00D0                   .dbline 168
+ 00D0           ;  
+ 00D0           ;  PORTD=0x00; 
+ 00D0 22BA              out 0x12,R2
+ 00D2                   .dbline 169
+ 00D2           ;  DDRD=0x06;//PD1=M2 PD2=M1
+ 00D2 86E0              ldi R24,6
+ 00D4 81BB              out 0x11,R24
+ 00D6                   .dbline 171
+ 00D6           ;  
+ 00D6           ;  PORTE=0x00; 
+ 00D6 23B8              out 0x3,R2
+ 00D8                   .dbline 172
+ 00D8           ;  DDRE=0x00;
+ 00D8 22B8              out 0x2,R2
+ 00DA                   .dbline 174
+ 00DA           ;  
+ 00DA           ;  PORTF=0x00; 
+ 00DA 20926200          sts 98,R2
+ 00DE                   .dbline 175
+ 00DE           ;  DDRF=0x07;//PF0=DIR2 PF1=BREAKE2 PF2=PWM2
+ 00DE 87E0              ldi R24,7
+ 00E0 80936100          sts 97,R24
+ 00E4                   .dbline 177
+ 00E4           ;  
+ 00E4           ;  PORTG=0x00; 
+ 00E4 20926500          sts 101,R2
+ 00E8                   .dbline 178
+ 00E8           ;  DDRG=0x00; 
+ 00E8 20926400          sts 100,R2
+ 00EC                   .dbline -2
+ 00EC           L18:
+ 00EC                   .dbline 0 ; func end
+ 00EC 0895              ret
+ 00EE                   .dbend
+ 00EE                   .dbfunc e init_USART0 _init_USART0 fV
+                        .even
+ 00EE           _init_USART0::
+ 00EE                   .dbline -1
+ 00EE                   .dbline 203
+ 00EE           ; }
+ 00EE           ; 
+ 00EE           ; 
+ 00EE           ; //UART0 initialize
+ 00EE           ; // desired baud rate: 76800
+ 00EE           ; // actual: baud rate:76923 (0.2%)
+ 00EE           ; // char size: 8 bit
+ 00EE           ; // parity: Disabled
+ 00EE           ; /*
+ 00EE           ; void uart0_init(void)
+ 00EE           ; {
+ 00EE           ;  UCSR0B = 0x00; //disable while setting baud rate
+ 00EE           ;  UCSR0A = 0x02;
+ 00EE           ;  UCSR0C = 0x06;
+ 00EE           ;  UBRR0L = 0x0C; //set baud rate lo
+ 00EE           ;  UBRR0H = 0x00; //set baud rate hi
+ 00EE           ;  UCSR0B = 0x98;
+ 00EE           ; }*/
+ 00EE           ; //UART0 initialize
+ 00EE           ; // desired baud rate: 57600
+ 00EE           ; // actual: baud rate:58824 (2.1%)
+ 00EE           ; // char size: 8 bit
+ 00EE           ; // parity: Disabled
+ 00EE           ; void init_USART0(void)  //USART0 初始化
+ 00EE           ; {
+ 00EE                   .dbline 204
+ 00EE           ;  UCSR0B = 0x00; //disable while setting baud rate
+ 00EE 2224              clr R2
+ 00F0 2AB8              out 0xa,R2
+ 00F2                   .dbline 205
+ 00F2           ;  UCSR0A = 0x02;
+ 00F2 82E0              ldi R24,2
+ 00F4 8BB9              out 0xb,R24
+ 00F6                   .dbline 206
+ 00F6           ;  UCSR0C = 0x06;
+ 00F6 86E0              ldi R24,6
+ 00F8 80939500          sts 149,R24
+ 00FC                   .dbline 207
+ 00FC           ;  UBRR0L = 0x10; //set baud rate lo
+ 00FC 80E1              ldi R24,16
+ 00FE 89B9              out 0x9,R24
+ 0100                   .dbline 208
+ 0100           ;  UBRR0H = 0x00; //set baud rate hi
+ 0100 20929000          sts 144,R2
+ 0104                   .dbline 209
+ 0104           ;  UCSR0B = 0x98;
+ 0104 88E9              ldi R24,152
+ 0106 8AB9              out 0xa,R24
+ 0108                   .dbline -2
+ 0108           L19:
+ 0108                   .dbline 0 ; func end
+ 0108 0895              ret
+ 010A                   .dbend
+ 010A                   .dbfunc e quit _quit fV
+                        .even
+ 010A           _quit::
+ 010A                   .dbline -1
+ 010A                   .dbline 213
+ 010A           ; }
+ 010A           ; 
+ 010A           ; void quit(void) 
+ 010A           ; {
+ 010A                   .dbline 214
+ 010A           ;     MCUCR = 0x01; 
+ 010A 81E0              ldi R24,1
+ 010C 85BF              out 0x35,R24
+ 010E                   .dbline 215
+ 010E           ;     MCUCR = 0x00;       //将中断向量表迁移到应用程序区头部 
+ 010E 2224              clr R2
+ 0110 25BE              out 0x35,R2
+ 0112                   .dbline 216
+ 0112           ;     RAMPZ = 0x00;       //RAMPZ清零初始化 
+ 0112 2BBE              out 0x3b,R2
+ 0114                   .dbline 217
+ 0114           ;     asm("jmp 0x0000\n");//跳转到Flash的0x0000处，执行用户的应用程序 
+ 0114 0C940000          jmp 0x0000
+ 0118                   
+ 0118                   .dbline -2
+ 0118           L20:
+ 0118                   .dbline 0 ; func end
+ 0118 0895              ret
+ 011A                   .dbend
+ 011A                   .dbfunc e Start _Start fV
+                        .even
+ 011A           _Start::
+ 011A                   .dbline -1
+ 011A                   .dbline 221
+ 011A           ; } 
+ 011A           ; 
+ 011A           ; void Start(void)
+ 011A           ; {
+ 011A                   .dbline 222
+ 011A           ;  InitialIO(); 
+ 011A D1DF              xcall _InitialIO
+ 011C                   .dbline 224
+ 011C           ;  
+ 011C           ;  init_USART0();
+ 011C E8DF              xcall _init_USART0
+ 011E                   .dbline 226
+ 011E           ;  
+ 011E           ;  MOTORSTOP//关电机
+ 011E                   .dbline 226
+ 011E 8AB3              in R24,0x1a
+ 0120 8760              ori R24,7
+ 0122 8ABB              out 0x1a,R24
+ 0124                   .dbline 226
+ 0124 8BB3              in R24,0x1b
+ 0126 8D7F              andi R24,253
+ 0128 8BBB              out 0x1b,R24
+ 012A                   .dbline 226
+ 012A 8BB3              in R24,0x1b
+ 012C 887F              andi R24,248
+ 012E 8BBB              out 0x1b,R24
+ 0130                   .dbline 226
+ 0130 80916100          lds R24,97
+ 0134 8760              ori R24,7
+ 0136 80936100          sts 97,R24
+ 013A                   .dbline 226
+ 013A 80916200          lds R24,98
+ 013E 8B7F              andi R24,251
+ 0140 80936200          sts 98,R24
+ 0144                   .dbline 226
+ 0144 80916200          lds R24,98
+ 0148 887F              andi R24,248
+ 014A 80936200          sts 98,R24
+ 014E                   .dbline 226
+ 014E BF9A              sbi 0x17,7
+ 0150                   .dbline 226
+ 0150 88B3              in R24,0x18
+ 0152 8F77              andi R24,127
+ 0154 88BB              out 0x18,R24
+ 0156                   .dbline 226
+ 0156                   .dbline 227
+ 0156           ;  BREAKE1_L//放开刹车
+ 0156                   .dbline 227
+ 0156 D09A              sbi 0x1a,0
+ 0158                   .dbline 227
+ 0158 8BB3              in R24,0x1b
+ 015A 8E7F              andi R24,254
+ 015C 8BBB              out 0x1b,R24
+ 015E                   .dbline 227
+ 015E                   .dbline 228
+ 015E           ;  BREAKE2_L//放开刹车
+ 015E                   .dbline 228
+ 015E 80916100          lds R24,97
+ 0162 8260              ori R24,2
+ 0164 80936100          sts 97,R24
+ 0168                   .dbline 228
+ 0168 80916200          lds R24,98
+ 016C 8D7F              andi R24,253
+ 016E 80936200          sts 98,R24
+ 0172                   .dbline 228
+ 0172                   .dbline 230
+ 0172           ;  
+ 0172           ;  Motor1Status.s.PWM=PWM1_PIN; 
+ 0172 89B3              in R24,0x19
+ 0174 9927              clr R25
+ 0176 8270              andi R24,2
+ 0178 9070              andi R25,0
+ 017A 9595              asr R25
+ 017C 8795              ror R24
+ 017E 8170              andi R24,1
+ 0180 9070              andi R25,0
+ 0182 E0914601          lds R30,_Motor1Status
+ 0186 F0914701          lds R31,_Motor1Status+1
+ 018A EE7F              andi R30,254
+ 018C E82B              or R30,R24
+ 018E F92B              or R31,R25
+ 0190 F0934701          sts _Motor1Status+1,R31
+ 0194 E0934601          sts _Motor1Status,R30
+ 0198                   .dbline 231
+ 0198           ;  Motor1Status.s.DIR=DIR1_PIN;
+ 0198 89B3              in R24,0x19
+ 019A 9927              clr R25
+ 019C 8470              andi R24,4
+ 019E 9070              andi R25,0
+ 01A0 9595              asr R25
+ 01A2 8795              ror R24
+ 01A4 9595              asr R25
+ 01A6 8795              ror R24
+ 01A8 8170              andi R24,1
+ 01AA 9070              andi R25,0
+ 01AC 880F              lsl R24
+ 01AE 991F              rol R25
+ 01B0 8270              andi R24,2
+ 01B2 9070              andi R25,0
+ 01B4 ED7F              andi R30,253
+ 01B6 E82B              or R30,R24
+ 01B8 F92B              or R31,R25
+ 01BA F0934701          sts _Motor1Status+1,R31
+ 01BE E0934601          sts _Motor1Status,R30
+ 01C2                   .dbline 232
+ 01C2           ;  Motor1Status.s.BrokenStop=0;
+ 01C2 CF01              movw R24,R30
+ 01C4 8B7F              andi R24,251
+ 01C6 90934701          sts _Motor1Status+1,R25
+ 01CA 80934601          sts _Motor1Status,R24
+ 01CE                   .dbline 233
+ 01CE           ;  Motor1Status.s.CommandStop=0;
+ 01CE 877F              andi R24,247
+ 01D0 90934701          sts _Motor1Status+1,R25
+ 01D4 80934601          sts _Motor1Status,R24
+ 01D8                   .dbline 234
+ 01D8           ;  Motor1Status.s.OverCurrent=0;
+ 01D8 8F7E              andi R24,239
+ 01DA 90934701          sts _Motor1Status+1,R25
+ 01DE 80934601          sts _Motor1Status,R24
+ 01E2                   .dbline 235
+ 01E2           ;  Motor1Status.s.UnderVoltage=0;
+ 01E2 8F7D              andi R24,223
+ 01E4 90934701          sts _Motor1Status+1,R25
+ 01E8 80934601          sts _Motor1Status,R24
+ 01EC                   .dbline 236
+ 01EC           ;  Motor1Status.s.StartResult=0;
+ 01EC 8F73              andi R24,63
+ 01EE 90934701          sts _Motor1Status+1,R25
+ 01F2 80934601          sts _Motor1Status,R24
+ 01F6                   .dbline 237
+ 01F6           ;  Motor1Status.s.ThisCurrent=0;
+ 01F6 9070              andi R25,0
+ 01F8 90934701          sts _Motor1Status+1,R25
+ 01FC 80934601          sts _Motor1Status,R24
+ 0200                   .dbline 239
+ 0200           ;  
+ 0200           ;  Motor2Status.s.PWM=PWM2_PIN; 
+ 0200 80B1              in R24,0x0
+ 0202 9927              clr R25
+ 0204 8470              andi R24,4
+ 0206 9070              andi R25,0
+ 0208 9595              asr R25
+ 020A 8795              ror R24
+ 020C 9595              asr R25
+ 020E 8795              ror R24
+ 0210 8170              andi R24,1
+ 0212 9070              andi R25,0
+ 0214 E0914401          lds R30,_Motor2Status
+ 0218 F0914501          lds R31,_Motor2Status+1
+ 021C EE7F              andi R30,254
+ 021E E82B              or R30,R24
+ 0220 F92B              or R31,R25
+ 0222 F0934501          sts _Motor2Status+1,R31
+ 0226 E0934401          sts _Motor2Status,R30
+ 022A                   .dbline 240
+ 022A           ;  Motor2Status.s.DIR=DIR2_PIN;
+ 022A 80B1              in R24,0x0
+ 022C 9927              clr R25
+ 022E 8170              andi R24,1
+ 0230 9070              andi R25,0
+ 0232 8170              andi R24,1
+ 0234 9070              andi R25,0
+ 0236 880F              lsl R24
+ 0238 991F              rol R25
+ 023A 8270              andi R24,2
+ 023C 9070              andi R25,0
+ 023E ED7F              andi R30,253
+ 0240 E82B              or R30,R24
+ 0242 F92B              or R31,R25
+ 0244 F0934501          sts _Motor2Status+1,R31
+ 0248 E0934401          sts _Motor2Status,R30
+ 024C                   .dbline 241
+ 024C           ;  Motor2Status.s.BrokenStop=0;
+ 024C CF01              movw R24,R30
+ 024E 8B7F              andi R24,251
+ 0250 90934501          sts _Motor2Status+1,R25
+ 0254 80934401          sts _Motor2Status,R24
+ 0258                   .dbline 242
+ 0258           ;  Motor2Status.s.CommandStop=0;
+ 0258 877F              andi R24,247
+ 025A 90934501          sts _Motor2Status+1,R25
+ 025E 80934401          sts _Motor2Status,R24
+ 0262                   .dbline 243
+ 0262           ;  Motor2Status.s.OverCurrent=0;
+ 0262 8F7E              andi R24,239
+ 0264 90934501          sts _Motor2Status+1,R25
+ 0268 80934401          sts _Motor2Status,R24
+ 026C                   .dbline 244
+ 026C           ;  Motor2Status.s.UnderVoltage=0;
+ 026C 8F7D              andi R24,223
+ 026E 90934501          sts _Motor2Status+1,R25
+ 0272 80934401          sts _Motor2Status,R24
+ 0276                   .dbline 245
+ 0276           ;  Motor2Status.s.StartResult=0;
+ 0276 8F73              andi R24,63
+ 0278 90934501          sts _Motor2Status+1,R25
+ 027C 80934401          sts _Motor2Status,R24
+ 0280                   .dbline 246
+ 0280           ;  Motor2Status.s.ThisCurrent=0;
+ 0280 9070              andi R25,0
+ 0282 90934501          sts _Motor2Status+1,R25
+ 0286 80934401          sts _Motor2Status,R24
+ 028A                   .dbline 248
+ 028A           ;   
+ 028A           ;  ACSR|=0x10;//清模拟比较器中断标志
+ 028A 449A              sbi 0x8,4
+ 028C                   .dbline 249
+ 028C           ;  ACSR=0x03;//开模拟比较器    
+ 028C 83E0              ldi R24,3
+ 028E 88B9              out 0x8,R24
+ 0290                   .dbline 250
+ 0290           ;  ACSR|=0x08;//开模拟比较器中断，任何时候都要进行欠压监测      
+ 0290 439A              sbi 0x8,3
+ 0292                   .dbline 251
+ 0292           ;  ACSR|=0x10;//清模拟比较器中断标志    
+ 0292 449A              sbi 0x8,4
+ 0294                   .dbline 254
+ 0294           ;       
+ 0294           ; 
+ 0294           ;  EIFR|=0x08;//清INT3中断标志,每位控制一个中断，可控制8个中断
+ 0294 88B7              in R24,0x38
+ 0296 8860              ori R24,8
+ 0298 88BF              out 0x38,R24
+ 029A                   .dbline 255
+ 029A           ;  EICRA|=0xc0; //INT3上升沿触发 ，每2位控制一个中断，共4个中断，0-低电平触发，1-保留，2-下降沿触发，3-上升沿触发
+ 029A 80916A00          lds R24,106
+ 029E 806C              ori R24,192
+ 02A0 80936A00          sts 106,R24
+ 02A4                   .dbline 256
+ 02A4           ;  EIMSK|=0x08;//使能INT3中断 ,每位控制一个中断，可控制8个中断
+ 02A4 89B7              in R24,0x39
+ 02A6 8860              ori R24,8
+ 02A8 89BF              out 0x39,R24
+ 02AA                   .dbline 258
+ 02AA           ;  
+ 02AA           ;  SREG=0x80;//总中断使能
+ 02AA 80E8              ldi R24,128
+ 02AC 8FBF              out 0x3f,R24
+ 02AE                   .dbline 260
+ 02AE           ;  
+ 02AE           ;  M1_H
+ 02AE 929A              sbi 0x12,2
+ 02B0                   .dbline 261
+ 02B0           ;  Delay30Ms();
+ 02B0 0E94C20B          xcall _Delay30Ms
+ 02B4                   .dbline 262
+ 02B4           ;  Delay30Ms();
+ 02B4 0E94C20B          xcall _Delay30Ms
+ 02B8                   .dbline 263
+ 02B8           ;  Delay30Ms();
+ 02B8 0E94C20B          xcall _Delay30Ms
+ 02BC                   .dbline 264
+ 02BC           ;  Delay30Ms();
+ 02BC 0E94C20B          xcall _Delay30Ms
+ 02C0                   .dbline 265
+ 02C0           ;  Delay30Ms();
+ 02C0 0E94C20B          xcall _Delay30Ms
+ 02C4                   .dbline 266
+ 02C4           ;  M1_L
+ 02C4 82B3              in R24,0x12
+ 02C6 8B7F              andi R24,251
+ 02C8 82BB              out 0x12,R24
+ 02CA                   .dbline -2
+ 02CA           L21:
+ 02CA                   .dbline 0 ; func end
+ 02CA 0895              ret
+ 02CC                   .dbend
+ 02CC                   .dbfunc e crc16 _crc16 fV
+ 02CC           ;             ii -> R20,R21
+ 02CC           ;             ch -> R10
+ 02CC           ;             cl -> R22
+ 02CC           ;         savelo -> R14
+ 02CC           ;         savehi -> y+0
+ 02CC           ;           flag -> R12,R13
+ 02CC           ;         length -> R18,R19
+ 02CC           ;         r_data -> y+11
+                        .even
+ 02CC           _crc16::
+ 02CC 0E940000          xcall push_arg4
+ 02D0 0E940000          xcall push_xgsetF0FC
+ 02D4 2197              sbiw R28,1
+ 02D6                   .dbline -1
+ 02D6                   .dbline 272
+ 02D6           ;  
+ 02D6           ;  
+ 02D6           ; }
+ 02D6           ; 
+ 02D6           ; void crc16(unsigned char r_data[],unsigned int length)
+ 02D6           ; {
+ 02D6                   .dbline 276
+ 02D6           ;         unsigned char cl,ch;
+ 02D6           ;         unsigned char savehi,savelo;
+ 02D6           ;         int ii,flag;
+ 02D6           ;         crc16hi=0xFF;
+ 02D6 8FEF              ldi R24,255
+ 02D8 80930F01          sts _crc16hi,R24
+ 02DC                   .dbline 277
+ 02DC           ;         crc16lo=0xFF;
+ 02DC 80930E01          sts _crc16lo,R24
+ 02E0                   .dbline 278
+ 02E0           ;         cl=0x1;
+ 02E0 61E0              ldi R22,1
+ 02E2                   .dbline 279
+ 02E2           ;         ch=0xA0;
+ 02E2 80EA              ldi R24,160
+ 02E4 A82E              mov R10,R24
+ 02E6                   .dbline 280
+ 02E6           ;         for (ii=0;ii<length-2;ii++)
+ 02E6 4427              clr R20
+ 02E8 5527              clr R21
+ 02EA 38C0              xjmp L26
+ 02EC           L23:
+ 02EC                   .dbline 281
+ 02EC           ;         {
+ 02EC                   .dbline 282
+ 02EC           ;             crc16lo=(crc16lo ^ r_data[ii]);
+ 02EC FA01              movw R30,R20
+ 02EE 0B84              ldd R0,y+11
+ 02F0 1C84              ldd R1,y+12
+ 02F2 E00D              add R30,R0
+ 02F4 F11D              adc R31,R1
+ 02F6 2080              ldd R2,z+0
+ 02F8 30900E01          lds R3,_crc16lo
+ 02FC 3224              eor R3,R2
+ 02FE 30920E01          sts _crc16lo,R3
+ 0302                   .dbline 283
+ 0302           ;                 for (flag=0;flag<8;flag++)
+ 0302 CC24              clr R12
+ 0304 DD24              clr R13
+ 0306           L27:
+ 0306                   .dbline 284
+ 0306           ;                 {
+ 0306                   .dbline 285
+ 0306           ;                        savehi=crc16hi;
+ 0306 20900F01          lds R2,_crc16hi
+ 030A 2882              std y+0,R2
+ 030C                   .dbline 286
+ 030C           ;                         savelo=crc16lo;
+ 030C E0900E01          lds R14,_crc16lo
+ 0310                   .dbline 287
+ 0310           ;                        crc16hi=(crc16hi>>1);
+ 0310 2694              lsr R2
+ 0312 20920F01          sts _crc16hi,R2
+ 0316                   .dbline 288
+ 0316           ;                        crc16lo=(crc16lo>>1);
+ 0316 2E2C              mov R2,R14
+ 0318 2694              lsr R2
+ 031A 20920E01          sts _crc16lo,R2
+ 031E                   .dbline 289
+ 031E           ;                         if ((savehi & 0x01)==0x01)
+ 031E 8881              ldd R24,y+0
+ 0320 8170              andi R24,1
+ 0322 8130              cpi R24,1
+ 0324 21F4              brne L31
+ 0326           X3:
+ 0326                   .dbline 290
+ 0326           ;                                 crc16lo=(crc16lo | 0x80);
+ 0326 822D              mov R24,R2
+ 0328 8068              ori R24,128
+ 032A 80930E01          sts _crc16lo,R24
+ 032E           L31:
+ 032E                   .dbline 291
+ 032E           ;                         if        ((savelo & 0x01)==0x01)
+ 032E 8E2D              mov R24,R14
+ 0330 8170              andi R24,1
+ 0332 8130              cpi R24,1
+ 0334 51F4              brne L33
+ 0336           X4:
+ 0336                   .dbline 292
+ 0336           ;                         {
+ 0336                   .dbline 293
+ 0336           ;                                 crc16hi = (crc16hi ^ ch);
+ 0336 20900F01          lds R2,_crc16hi
+ 033A 2A24              eor R2,R10
+ 033C 20920F01          sts _crc16hi,R2
+ 0340                   .dbline 294
+ 0340           ;                                                               crc16lo = (crc16lo ^ cl);
+ 0340 20900E01          lds R2,_crc16lo
+ 0344 2626              eor R2,R22
+ 0346 20920E01          sts _crc16lo,R2
+ 034A                   .dbline 295
+ 034A           ;                         }        
+ 034A           L33:
+ 034A                   .dbline 296
+ 034A           ;                 }
+ 034A           L28:
+ 034A                   .dbline 283
+ 034A C601              movw R24,R12
+ 034C 0196              adiw R24,1
+ 034E 6C01              movw R12,R24
+ 0350                   .dbline 283
+ 0350 8830              cpi R24,8
+ 0352 E0E0              ldi R30,0
+ 0354 9E07              cpc R25,R30
+ 0356 BCF2              brlt L27
+ 0358           X5:
+ 0358                   .dbline 297
+ 0358           ;         }
+ 0358           L24:
+ 0358                   .dbline 280
+ 0358 4F5F              subi R20,255  ; offset = 1
+ 035A 5F4F              sbci R21,255
+ 035C           L26:
+ 035C                   .dbline 280
+ 035C C901              movw R24,R18
+ 035E 0297              sbiw R24,2
+ 0360 4817              cp R20,R24
+ 0362 5907              cpc R21,R25
+ 0364 08F4              brsh X7
+ 0366 C2CF              xjmp L23
+ 0368           X7:
+ 0368           X6:
+ 0368                   .dbline -2
+ 0368           L22:
+ 0368                   .dbline 0 ; func end
+ 0368 2196              adiw R28,1
+ 036A 0E940000          xcall pop_xgsetF0FC
+ 036E 2496              adiw R28,4
+ 0370 0895              ret
+ 0372                   .dbsym r ii 20 I
+ 0372                   .dbsym r ch 10 c
+ 0372                   .dbsym r cl 22 c
+ 0372                   .dbsym r savelo 14 c
+ 0372                   .dbsym l savehi 0 c
+ 0372                   .dbsym r flag 12 I
+ 0372                   .dbsym r length 18 i
+ 0372                   .dbsym l r_data 11 pc
+ 0372                   .dbend
+                        .area vector(rom, abs)
+                        .org 116
+ 0074 0C94B901          jmp _timer3_ovf_isr
+                        .area text(rom, con, rel)
+ 0372                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 0372                   .dbfunc e timer3_ovf_isr _timer3_ovf_isr fV
+                        .even
+ 0372           _timer3_ovf_isr::
+ 0372 2A92              st -y,R2
+ 0374 8A93              st -y,R24
+ 0376 2FB6              IN R2,63
+ 0378 2A92              st -y,R2
+ 037A                   .dbline -1
+ 037A                   .dbline 302
+ 037A           ; }
+ 037A           ; 
+ 037A           ; #pragma interrupt_handler timer3_ovf_isr:iv_TIM3_OVF
+ 037A           ; void timer3_ovf_isr(void)
+ 037A           ; {
+ 037A                   .dbline 303
+ 037A           ;   UpdateBegin=0;//回到待命状态
+ 037A 2224              clr R2
+ 037C 20921201          sts _UpdateBegin,R2
+ 0380                   .dbline 304
+ 0380           ;   TCCR3B = 0x00; //stop  
+ 0380 20928A00          sts 138,R2
+ 0384                   .dbline 305
+ 0384           ;   ETIMSK &= 0xfb;//关定时器3中断
+ 0384 80917D00          lds R24,125
+ 0388 8B7F              andi R24,251
+ 038A 80937D00          sts 125,R24
+ 038E                   .dbline 306
+ 038E           ;   ETIFR|=0x04; //清定时器3中断标志 
+ 038E 80917C00          lds R24,124
+ 0392 8460              ori R24,4
+ 0394 80937C00          sts 124,R24
+ 0398                   .dbline -2
+ 0398           L35:
+ 0398                   .dbline 0 ; func end
+ 0398 2990              ld R2,y+
+ 039A 2FBE              OUT 63,R2
+ 039C 8991              ld R24,y+
+ 039E 2990              ld R2,y+
+ 03A0 1895              reti
+ 03A2                   .dbend
+ 03A2                   .dbfunc e SendUart0 _SendUart0 fV
+ 03A2           ;              t -> R10
+ 03A2           ;              s -> R18
+ 03A2           ;              c -> R16
+                        .even
+ 03A2           _SendUart0::
+ 03A2 AA92              st -y,R10
+ 03A4                   .dbline -1
+ 03A4                   .dbline 311
+ 03A4           ; }
+ 03A4           ; 
+ 03A4           ;       
+ 03A4           ; void SendUart0(unsigned char c,unsigned char s)   //串口发送数据
+ 03A4           ; {//要求流量板在s个8ms内通过串口返回数据
+ 03A4                   .dbline 314
+ 03A4           ; unsigned char t;      
+ 03A4           ; 
+ 03A4           ;   Uart0RxData[0]=0xff;
+ 03A4 8FEF              ldi R24,255
+ 03A6 80930701          sts _Uart0RxData,R24
+ 03AA                   .dbline 315
+ 03AA           ;   Uart0RxData[1]=0xff;
+ 03AA 80930801          sts _Uart0RxData+1,R24
+ 03AE                   .dbline 316
+ 03AE           ;   Uart0RxCounter=0; //清串口接受计数  
+ 03AE 2224              clr R2
+ 03B0 20920901          sts _Uart0RxCounter,R2
+ 03B4                   .dbline 318
+ 03B4           ;   
+ 03B4           ;    t=UDR0;//开串口接收中断前读空缓存
+ 03B4 ACB0              in R10,0xc
+ 03B6           L38:
+ 03B6                   .dbline 320
+ 03B6           ;    
+ 03B6           ;   while(!(UCSR0A&(1<<UDRE0)));   // 等待发送缓冲器为空
+ 03B6           L39:
+ 03B6                   .dbline 320
+ 03B6 5D9B              sbis 0xb,5
+ 03B8 FECF              rjmp L38
+ 03BA           X8:
+ 03BA                   .dbline 321
+ 03BA           ;   UDR0=c;   // 将数据放入缓冲器，发送数据
+ 03BA 0CB9              out 0xc,R16
+ 03BC                   .dbline 323
+ 03BC           ;                    
+ 03BC           ;    t=UDR0;//开串口接收中断前读空缓存
+ 03BC ACB0              in R10,0xc
+ 03BE                   .dbline 324
+ 03BE           ;    UCSR0B|=0x80;//开串口接收中断
+ 03BE 579A              sbi 0xa,7
+ 03C0                   .dbline 327
+ 03C0           ;    
+ 03C0           ;    //超时设定
+ 03C0           ;       TCCR1B = 0x00; //stop
+ 03C0 2224              clr R2
+ 03C2 2EBC              out 0x2e,R2
+ 03C4                   .dbline 328
+ 03C4           ;       if(s==0)
+ 03C4 2223              tst R18
+ 03C6 39F4              brne L41
+ 03C8           X9:
+ 03C8                   .dbline 329
+ 03C8           ;        {
+ 03C8                   .dbline 330
+ 03C8           ;        TCNT1 = 22576;//5500ms 
+ 03C8 80E3              ldi R24,22576
+ 03CA 98E5              ldi R25,88
+ 03CC 9DBD              out 0x2d,R25
+ 03CE 8CBD              out 0x2c,R24
+ 03D0                   .dbline 331
+ 03D0           ;          TCCR1B = 0x05; //1024分频
+ 03D0 85E0              ldi R24,5
+ 03D2 8EBD              out 0x2e,R24
+ 03D4                   .dbline 332
+ 03D4           ;        }
+ 03D4 06C0              xjmp L42
+ 03D6           L41:
+ 03D6                   .dbline 334
+ 03D6           ;        else
+ 03D6           ;        {
+ 03D6                   .dbline 335
+ 03D6           ;          TCNT1 = 1536;//8ms 
+ 03D6 80E0              ldi R24,1536
+ 03D8 96E0              ldi R25,6
+ 03DA 9DBD              out 0x2d,R25
+ 03DC 8CBD              out 0x2c,R24
+ 03DE                   .dbline 336
+ 03DE           ;          TCCR1B = 0x01; //1分频
+ 03DE 81E0              ldi R24,1
+ 03E0 8EBD              out 0x2e,R24
+ 03E2                   .dbline 337
+ 03E2           ;        }
+ 03E2           L42:
+ 03E2                   .dbline 339
+ 03E2           ;       
+ 03E2           ;       TIFR|=0x04; //清定时器1中断标志
+ 03E2 86B7              in R24,0x36
+ 03E4 8460              ori R24,4
+ 03E6 86BF              out 0x36,R24
+ 03E8           L43:
+ 03E8                   .dbline 340
+ 03E8           ;       while((TIFR&0x04)==0x00); 
+ 03E8           L44:
+ 03E8                   .dbline 340
+ 03E8 26B6              in R2,0x36
+ 03EA 22FE              sbrs R2,2
+ 03EC FDCF              rjmp L43
+ 03EE           X10:
+ 03EE                   .dbline 341
+ 03EE           ;       TCCR1B = 0x00; //stop
+ 03EE 2224              clr R2
+ 03F0 2EBC              out 0x2e,R2
+ 03F2                   .dbline 342
+ 03F2           ;       TIFR|=0x04; //清定时器1中断标志 
+ 03F2 86B7              in R24,0x36
+ 03F4 8460              ori R24,4
+ 03F6 86BF              out 0x36,R24
+ 03F8                   .dbline 343
+ 03F8           ;       UCSR0B&=0x7f;//关串口接收中断
+ 03F8 8AB1              in R24,0xa
+ 03FA 8F77              andi R24,127
+ 03FC 8AB9              out 0xa,R24
+ 03FE                   .dbline -2
+ 03FE           L36:
+ 03FE                   .dbline 0 ; func end
+ 03FE A990              ld R10,y+
+ 0400 0895              ret
+ 0402                   .dbsym r t 10 c
+ 0402                   .dbsym r s 18 c
+ 0402                   .dbsym r c 16 c
+ 0402                   .dbend
+ 0402                   .dbfunc e SetTimer3 _SetTimer3 fV
+                        .even
+ 0402           _SetTimer3::
+ 0402                   .dbline -1
+ 0402                   .dbline 348
+ 0402           ; }
+ 0402           ; 
+ 0402           ; 
+ 0402           ; void SetTimer3(void)//页写开始后，如果有500ms时间内一个字节也没收到，则退出页写状态，回到待命状态
+ 0402           ; {  
+ 0402                   .dbline 349
+ 0402           ;     TCCR3B = 0x00; //stop    
+ 0402 2224              clr R2
+ 0404 20928A00          sts 138,R2
+ 0408                   .dbline 350
+ 0408           ;     TCNT3H = 0xF0; //8M,500ms
+ 0408 80EF              ldi R24,240
+ 040A 80938900          sts 137,R24
+ 040E                   .dbline 351
+ 040E           ;     TCNT3L = 0xBE; //8M,500ms
+ 040E 8EEB              ldi R24,190
+ 0410 80938800          sts 136,R24
+ 0414                   .dbline 352
+ 0414           ;       ETIFR|=0x04; //清定时器3中断标志
+ 0414 80917C00          lds R24,124
+ 0418 8460              ori R24,4
+ 041A 80937C00          sts 124,R24
+ 041E                   .dbline 353
+ 041E           ;       TCCR3B = 0x05; //1024分频
+ 041E 85E0              ldi R24,5
+ 0420 80938A00          sts 138,R24
+ 0424                   .dbline 354
+ 0424           ;       ETIFR|=0x04; //清定时器3中断标志
+ 0424 80917C00          lds R24,124
+ 0428 8460              ori R24,4
+ 042A 80937C00          sts 124,R24
+ 042E                   .dbline 355
+ 042E           ;       ETIMSK |= 0x04; //开定时器3中断
+ 042E 80917D00          lds R24,125
+ 0432 8460              ori R24,4
+ 0434 80937D00          sts 125,R24
+ 0438                   .dbline -2
+ 0438           L46:
+ 0438                   .dbline 0 ; func end
+ 0438 0895              ret
+ 043A                   .dbend
+ 043A                   .dbfunc e main _main fV
+ 043A           ;              t -> <dead>
+ 043A           ;              k -> <dead>
+ 043A           ;              j -> <dead>
+ 043A           ;              i -> <dead>
+                        .even
+ 043A           _main::
+ 043A                   .dbline -1
+ 043A                   .dbline 359
+ 043A           ; }
+ 043A           ; 
+ 043A           ; void main(void)
+ 043A           ; {
+ 043A                   .dbline 362
+ 043A           ;        unsigned int i,j,k;
+ 043A           ;        unsigned char t;       
+ 043A           ;      Delay30Ms();
+ 043A 0E94C20B          xcall _Delay30Ms
+ 043E                   .dbline 364
+ 043E           ;        
+ 043E           ;        IntFlag=0;//无接收帧中断
+ 043E 2224              clr R2
+ 0440 20921501          sts _IntFlag,R2
+ 0444                   .dbline 365
+ 0444           ;      UpdateBegin=0;//无标定系数下发
+ 0444 20921201          sts _UpdateBegin,R2
+ 0448                   .dbline 366
+ 0448           ;        T_dat=0;
+ 0448 3324              clr R3
+ 044A 30923101          sts _T_dat+1,R3
+ 044E 20923001          sts _T_dat,R2
+ 0452                   .dbline 367
+ 0452           ;        R_dat=0;
+ 0452 30922F01          sts _R_dat+1,R3
+ 0456 20922E01          sts _R_dat,R2
+ 045A                   .dbline 368
+ 045A           ;        DSP_PageCn=0;
+ 045A 20920A01          sts _DSP_PageCn,R2
+ 045E                   .dbline 370
+ 045E           ;        
+ 045E           ;        Start();
+ 045E 5DDE              xcall _Start
+ 0460                   .dbline 372
+ 0460           ;        
+ 0460           ;        Delay30Ms();
+ 0460 0E94C20B          xcall _Delay30Ms
+ 0464                   .dbline 375
+ 0464           ; 
+ 0464           ;        
+ 0464           ;       TCCR3B = 0x00; //stop    
+ 0464 2224              clr R2
+ 0466 20928A00          sts 138,R2
+ 046A                   .dbline 376
+ 046A           ;       TCNT3H = 0xd1; ////8M,1.5s
+ 046A 81ED              ldi R24,209
+ 046C 80938900          sts 137,R24
+ 0470                   .dbline 377
+ 0470           ;     TCNT3L = 0x20; ////8M,1.5s
+ 0470 80E2              ldi R24,32
+ 0472 80938800          sts 136,R24
+ 0476                   .dbline 378
+ 0476           ;       ETIFR|=0x04; //清定时器3中断标志
+ 0476 80917C00          lds R24,124
+ 047A 8460              ori R24,4
+ 047C 80937C00          sts 124,R24
+ 0480                   .dbline 379
+ 0480           ;       ETIMSK &= 0xfb;//关定时器3中断
+ 0480 80917D00          lds R24,125
+ 0484 8B7F              andi R24,251
+ 0486 80937D00          sts 125,R24
+ 048A                   .dbline 380
+ 048A           ;       TCCR3B = 0x05; //1024分频
+ 048A 85E0              ldi R24,5
+ 048C 80938A00          sts 138,R24
+ 0490                   .dbline 381
+ 0490           ;       ETIFR|=0x04; //清定时器3中断标志
+ 0490 80917C00          lds R24,124
+ 0494 8460              ori R24,4
+ 0496 80937C00          sts 124,R24
+ 049A                   .dbline 383
+ 049A           ;           
+ 049A           ;        UpdateBegin=0;
+ 049A 20921201          sts _UpdateBegin,R2
+ 049E E9C0              xjmp L49
+ 04A0           L48:
+ 04A0                   .dbline 385
+ 04A0           ;       while( ((ETIFR&0x04)==0x00) && (UpdateBegin==0) )
+ 04A0           ;       {
+ 04A0                   .dbline 386
+ 04A0           ;        if((IntFlag==1))//3秒内收到开始更新命令
+ 04A0 80911501          lds R24,_IntFlag
+ 04A4 8130              cpi R24,1
+ 04A6 09F0              breq X42
+ 04A8 D2C0              xjmp L51
+ 04AA           X42:
+ 04AA           X11:
+ 04AA                   .dbline 387
+ 04AA           ;        {  
+ 04AA                   .dbline 388
+ 04AA           ;         if(R_dat==0xfa) //主控板握手
+ 04AA 80912E01          lds R24,_R_dat
+ 04AE 90912F01          lds R25,_R_dat+1
+ 04B2 8A3F              cpi R24,250
+ 04B4 E0E0              ldi R30,0
+ 04B6 9E07              cpc R25,R30
+ 04B8 F1F4              brne L53
+ 04BA           X12:
+ 04BA                   .dbline 389
+ 04BA           ;          {
+ 04BA                   .dbline 390
+ 04BA           ;           UpdateBegin=1;
+ 04BA 81E0              ldi R24,1
+ 04BC 80931201          sts _UpdateBegin,R24
+ 04C0                   .dbline 392
+ 04C0           ;               //SendUart0(0xb5,1);
+ 04C0           ;           T_com=0x0f;
+ 04C0 8FE0              ldi R24,15
+ 04C2 80932D01          sts _T_com,R24
+ 04C6                   .dbline 393
+ 04C6           ;           T_dat=0xe7fa;       
+ 04C6 8AEF              ldi R24,59386
+ 04C8 97EE              ldi R25,231
+ 04CA 90933101          sts _T_dat+1,R25
+ 04CE 80933001          sts _T_dat,R24
+ 04D2                   .dbline 394
+ 04D2           ;               Delay30Ms();
+ 04D2 0E94C20B          xcall _Delay30Ms
+ 04D6                   .dbline 395
+ 04D6           ;               SendManchester();  
+ 04D6 FBD5              xcall _SendManchester
+ 04D8                   .dbline 396
+ 04D8           ;               IntFlag=0;//无命令帧
+ 04D8 2224              clr R2
+ 04DA 20921501          sts _IntFlag,R2
+ 04DE                   .dbline 397
+ 04DE           ;           EIFR|=0x08;//清INT3中断标志 
+ 04DE 88B7              in R24,0x38
+ 04E0 8860              ori R24,8
+ 04E2 88BF              out 0x38,R24
+ 04E4                   .dbline 398
+ 04E4           ;               EICRA|=0xc0; //INT3上升沿触发 
+ 04E4 80916A00          lds R24,106
+ 04E8 806C              ori R24,192
+ 04EA 80936A00          sts 106,R24
+ 04EE                   .dbline 399
+ 04EE           ;               EIMSK|=0x08;//使能INT3中断 
+ 04EE 89B7              in R24,0x39
+ 04F0 8860              ori R24,8
+ 04F2 89BF              out 0x39,R24
+ 04F4                   .dbline 400
+ 04F4           ;          }    
+ 04F4 ACC0              xjmp L54
+ 04F6           L53:
+ 04F6                   .dbline 401
+ 04F6           ;          else if(R_dat==0xfb)//采集板DSP握手
+ 04F6 80912E01          lds R24,_R_dat
+ 04FA 90912F01          lds R25,_R_dat+1
+ 04FE 8B3F              cpi R24,251
+ 0500 E0E0              ldi R30,0
+ 0502 9E07              cpc R25,R30
+ 0504 C9F5              brne L55
+ 0506           X13:
+ 0506                   .dbline 402
+ 0506           ;          {
+ 0506                   .dbline 403
+ 0506           ;           UpdateBegin=1;
+ 0506 81E0              ldi R24,1
+ 0508 80931201          sts _UpdateBegin,R24
+ 050C                   .dbline 404
+ 050C           ;               SendUart0(0xb5,1);  
+ 050C 21E0              ldi R18,1
+ 050E 05EB              ldi R16,181
+ 0510 48DF              xcall _SendUart0
+ 0512                   .dbline 405
+ 0512           ;               T_com=0x0f;
+ 0512 8FE0              ldi R24,15
+ 0514 80932D01          sts _T_com,R24
+ 0518                   .dbline 406
+ 0518           ;               T_dat=Uart0RxData[0];//成功的话应返回0xe7fb
+ 0518 20900701          lds R2,_Uart0RxData
+ 051C 3324              clr R3
+ 051E 30923101          sts _T_dat+1,R3
+ 0522 20923001          sts _T_dat,R2
+ 0526                   .dbline 407
+ 0526           ;               T_dat<<=8;      
+ 0526 20903001          lds R2,_T_dat
+ 052A 30903101          lds R3,_T_dat+1
+ 052E 322C              mov R3,R2
+ 0530 2224              clr R2
+ 0532 30923101          sts _T_dat+1,R3
+ 0536 20923001          sts _T_dat,R2
+ 053A                   .dbline 408
+ 053A           ;               T_dat|=Uart0RxData[1];
+ 053A 20900801          lds R2,_Uart0RxData+1
+ 053E 3324              clr R3
+ 0540 40903001          lds R4,_T_dat
+ 0544 50903101          lds R5,_T_dat+1
+ 0548 4228              or R4,R2
+ 054A 5328              or R5,R3
+ 054C 50923101          sts _T_dat+1,R5
+ 0550 40923001          sts _T_dat,R4
+ 0554                   .dbline 409
+ 0554           ;               Delay30Ms();
+ 0554 0E94C20B          xcall _Delay30Ms
+ 0558                   .dbline 410
+ 0558           ;               SendManchester(); 
+ 0558 BAD5              xcall _SendManchester
+ 055A                   .dbline 411
+ 055A           ;               IntFlag=0;//无命令帧
+ 055A 2224              clr R2
+ 055C 20921501          sts _IntFlag,R2
+ 0560                   .dbline 412
+ 0560           ;           EIFR|=0x08;//清INT3中断标志 
+ 0560 88B7              in R24,0x38
+ 0562 8860              ori R24,8
+ 0564 88BF              out 0x38,R24
+ 0566                   .dbline 413
+ 0566           ;               EICRA|=0xc0; //INT3上升沿触发 
+ 0566 80916A00          lds R24,106
+ 056A 806C              ori R24,192
+ 056C 80936A00          sts 106,R24
+ 0570                   .dbline 414
+ 0570           ;               EIMSK|=0x08;//使能INT3中断 
+ 0570 89B7              in R24,0x39
+ 0572 8860              ori R24,8
+ 0574 89BF              out 0x39,R24
+ 0576                   .dbline 415
+ 0576           ;          }
+ 0576 6BC0              xjmp L56
+ 0578           L55:
+ 0578                   .dbline 416
+ 0578           ;          else if(R_dat==0xf9)//采集板PIC握手
+ 0578 80912E01          lds R24,_R_dat
+ 057C 90912F01          lds R25,_R_dat+1
+ 0580 893F              cpi R24,249
+ 0582 E0E0              ldi R30,0
+ 0584 9E07              cpc R25,R30
+ 0586 A9F5              brne L58
+ 0588           X14:
+ 0588                   .dbline 417
+ 0588           ;          {
+ 0588                   .dbline 418
+ 0588           ;           UpdateBegin=1;
+ 0588 81E0              ldi R24,1
+ 058A 80931201          sts _UpdateBegin,R24
+ 058E                   .dbline 419
+ 058E           ;               SendUart0(0xf9,1);  
+ 058E 21E0              ldi R18,1
+ 0590 09EF              ldi R16,249
+ 0592 07DF              xcall _SendUart0
+ 0594                   .dbline 420
+ 0594           ;               T_com=0x0f;
+ 0594 8FE0              ldi R24,15
+ 0596 80932D01          sts _T_com,R24
+ 059A                   .dbline 421
+ 059A           ;               T_dat=0xe7;
+ 059A 87EE              ldi R24,231
+ 059C 90E0              ldi R25,0
+ 059E 90933101          sts _T_dat+1,R25
+ 05A2 80933001          sts _T_dat,R24
+ 05A6                   .dbline 422
+ 05A6           ;               T_dat<<=8;      
+ 05A6 1C01              movw R2,R24
+ 05A8 322C              mov R3,R2
+ 05AA 2224              clr R2
+ 05AC 30923101          sts _T_dat+1,R3
+ 05B0 20923001          sts _T_dat,R2
+ 05B4                   .dbline 423
+ 05B4           ;               T_dat|=Uart0RxData[0];//成功的话应返回0xe7f9
+ 05B4 20900701          lds R2,_Uart0RxData
+ 05B8 3324              clr R3
+ 05BA 40903001          lds R4,_T_dat
+ 05BE 50903101          lds R5,_T_dat+1
+ 05C2 4228              or R4,R2
+ 05C4 5328              or R5,R3
+ 05C6 50923101          sts _T_dat+1,R5
+ 05CA 40923001          sts _T_dat,R4
+ 05CE                   .dbline 424
+ 05CE           ;               Delay30Ms();
+ 05CE 0E94C20B          xcall _Delay30Ms
+ 05D2                   .dbline 425
+ 05D2           ;               SendManchester(); 
+ 05D2 7DD5              xcall _SendManchester
+ 05D4                   .dbline 426
+ 05D4           ;               IntFlag=0;//无命令帧
+ 05D4 2224              clr R2
+ 05D6 20921501          sts _IntFlag,R2
+ 05DA                   .dbline 427
+ 05DA           ;           EIFR|=0x08;//清INT3中断标志 
+ 05DA 88B7              in R24,0x38
+ 05DC 8860              ori R24,8
+ 05DE 88BF              out 0x38,R24
+ 05E0                   .dbline 428
+ 05E0           ;               EICRA|=0xc0; //INT3上升沿触发 
+ 05E0 80916A00          lds R24,106
+ 05E4 806C              ori R24,192
+ 05E6 80936A00          sts 106,R24
+ 05EA                   .dbline 429
+ 05EA           ;               EIMSK|=0x08;//使能INT3中断 
+ 05EA 89B7              in R24,0x39
+ 05EC 8860              ori R24,8
+ 05EE 89BF              out 0x39,R24
+ 05F0                   .dbline 430
+ 05F0           ;          }
+ 05F0 2EC0              xjmp L59
+ 05F2           L58:
+ 05F2                   .dbline 432
+ 05F2           ;          else //其它命令均视为退出更新
+ 05F2           ;          {
+ 05F2                   .dbline 433
+ 05F2           ;            TCCR3B = 0x00; //stop    
+ 05F2 2224              clr R2
+ 05F4 20928A00          sts 138,R2
+ 05F8                   .dbline 434
+ 05F8           ;            ETIFR|=0x04; //清定时器3中断标志
+ 05F8 80917C00          lds R24,124
+ 05FC 8460              ori R24,4
+ 05FE 80937C00          sts 124,R24
+ 0602                   .dbline 435
+ 0602           ;            ETIMSK &= 0xfb;//关定时器3中断
+ 0602 80917D00          lds R24,125
+ 0606 8B7F              andi R24,251
+ 0608 80937D00          sts 125,R24
+ 060C                   .dbline 436
+ 060C           ;            SendUart0(0xb8,1);
+ 060C 21E0              ldi R18,1
+ 060E 08EB              ldi R16,184
+ 0610 C8DE              xcall _SendUart0
+ 0612                   .dbline 437
+ 0612           ;                T_dat=Uart0RxData[0];//成功的话应返回0xe7
+ 0612 20900701          lds R2,_Uart0RxData
+ 0616 3324              clr R3
+ 0618 30923101          sts _T_dat+1,R3
+ 061C 20923001          sts _T_dat,R2
+ 0620                   .dbline 438
+ 0620           ;                T_dat<<=8; 
+ 0620 20903001          lds R2,_T_dat
+ 0624 30903101          lds R3,_T_dat+1
+ 0628 322C              mov R3,R2
+ 062A 2224              clr R2
+ 062C 30923101          sts _T_dat+1,R3
+ 0630 20923001          sts _T_dat,R2
+ 0634                   .dbline 439
+ 0634           ;                T_dat|=0xff;
+ 0634 C101              movw R24,R2
+ 0636 8F6F              ori R24,255
+ 0638 90933101          sts _T_dat+1,R25
+ 063C 80933001          sts _T_dat,R24
+ 0640                   .dbline 440
+ 0640           ;                T_com=0x0f;
+ 0640 8FE0              ldi R24,15
+ 0642 80932D01          sts _T_com,R24
+ 0646                   .dbline 441
+ 0646           ;                Delay30Ms();
+ 0646 0E94C20B          xcall _Delay30Ms
+ 064A                   .dbline 442
+ 064A           ;                SendManchester();       
+ 064A 41D5              xcall _SendManchester
+ 064C                   .dbline 443
+ 064C           ;                quit();
+ 064C 5EDD              xcall _quit
+ 064E                   .dbline 444
+ 064E           ;          }   
+ 064E           L59:
+ 064E           L56:
+ 064E           L54:
+ 064E                   .dbline 445
+ 064E           ;        }              
+ 064E           L51:
+ 064E                   .dbline 446
+ 064E           ;        if(IntFlag==2)//校验位错误处理程序
+ 064E 80911501          lds R24,_IntFlag
+ 0652 8230              cpi R24,2
+ 0654 71F4              brne L60
+ 0656           X15:
+ 0656                   .dbline 447
+ 0656           ;        { 
+ 0656                   .dbline 448
+ 0656           ;          IntFlag=0;//无命令帧
+ 0656 2224              clr R2
+ 0658 20921501          sts _IntFlag,R2
+ 065C                   .dbline 449
+ 065C           ;          EIFR|=0x08;//清INT3中断标志 
+ 065C 88B7              in R24,0x38
+ 065E 8860              ori R24,8
+ 0660 88BF              out 0x38,R24
+ 0662                   .dbline 450
+ 0662           ;          EICRA|=0xc0; //INT3上升沿触发 
+ 0662 80916A00          lds R24,106
+ 0666 806C              ori R24,192
+ 0668 80936A00          sts 106,R24
+ 066C                   .dbline 451
+ 066C           ;          EIMSK|=0x08;//使能INT3中断 
+ 066C 89B7              in R24,0x39
+ 066E 8860              ori R24,8
+ 0670 89BF              out 0x39,R24
+ 0672                   .dbline 452
+ 0672           ;        }                                                                      
+ 0672           L60:
+ 0672                   .dbline 453
+ 0672           ;       } 
+ 0672           L49:
+ 0672                   .dbline 384
+ 0672 20907C00          lds R2,124
+ 0676 22FC              sbrc R2,2
+ 0678 05C0              rjmp L62
+ 067A           X16:
+ 067A 20901201          lds R2,_UpdateBegin
+ 067E 2220              tst R2
+ 0680 09F4              brne X43
+ 0682 0ECF              xjmp L48
+ 0684           X43:
+ 0684           X17:
+ 0684           L62:
+ 0684                   .dbline 455
+ 0684           ;       
+ 0684           ;       TCCR3B = 0x00; //stop    
+ 0684 2224              clr R2
+ 0686 20928A00          sts 138,R2
+ 068A                   .dbline 456
+ 068A           ;       ETIFR|=0x04; //清定时器3中断标志
+ 068A 80917C00          lds R24,124
+ 068E 8460              ori R24,4
+ 0690 80937C00          sts 124,R24
+ 0694                   .dbline 457
+ 0694           ;       ETIMSK &= 0xfb;//关定时器3中断
+ 0694 80917D00          lds R24,125
+ 0698 8B7F              andi R24,251
+ 069A 80937D00          sts 125,R24
+ 069E                   .dbline 459
+ 069E           ;       
+ 069E           ;       if(UpdateBegin==0)//3秒内没收到开始更新命令，则直接跳到主程序
+ 069E 20901201          lds R2,_UpdateBegin
+ 06A2 2220              tst R2
+ 06A4 09F4              brne L63
+ 06A6           X18:
+ 06A6                   .dbline 460
+ 06A6           ;       {
+ 06A6                   .dbline 461
+ 06A6           ;        quit();
+ 06A6 31DD              xcall _quit
+ 06A8                   .dbline 462
+ 06A8           ;       }
+ 06A8           L63:
+ 06A8                   .dbline 464
+ 06A8           ;       
+ 06A8           ;       UpdateBegin=0;
+ 06A8 2224              clr R2
+ 06AA 20921201          sts _UpdateBegin,R2
+ 06AE B0C2              xjmp L66
+ 06B0           L65:
+ 06B0                   .dbline 466
+ 06B0           ;       while(1)
+ 06B0           ;       {
+ 06B0                   .dbline 467
+ 06B0           ;        if(IntFlag==2)//校验位错误处理程序
+ 06B0 80911501          lds R24,_IntFlag
+ 06B4 8230              cpi R24,2
+ 06B6 79F4              brne L68
+ 06B8           X19:
+ 06B8                   .dbline 468
+ 06B8           ;        { 
+ 06B8                   .dbline 469
+ 06B8           ;          IntFlag=0;//无命令帧
+ 06B8 2224              clr R2
+ 06BA 20921501          sts _IntFlag,R2
+ 06BE                   .dbline 470
+ 06BE           ;          EIFR|=0x08;//清INT3中断标志 
+ 06BE 88B7              in R24,0x38
+ 06C0 8860              ori R24,8
+ 06C2 88BF              out 0x38,R24
+ 06C4                   .dbline 471
+ 06C4           ;          EICRA|=0xc0; //INT3上升沿触发 
+ 06C4 80916A00          lds R24,106
+ 06C8 806C              ori R24,192
+ 06CA 80936A00          sts 106,R24
+ 06CE                   .dbline 472
+ 06CE           ;          EIMSK|=0x08;//使能INT3中断 
+ 06CE 89B7              in R24,0x39
+ 06D0 8860              ori R24,8
+ 06D2 89BF              out 0x39,R24
+ 06D4                   .dbline 473
+ 06D4           ;        }
+ 06D4 9DC2              xjmp L69
+ 06D6           L68:
+ 06D6                   .dbline 474
+ 06D6           ;       else if(IntFlag==1)//接收到了正常命令帧
+ 06D6 80911501          lds R24,_IntFlag
+ 06DA 8130              cpi R24,1
+ 06DC 09F0              breq X44
+ 06DE 98C2              xjmp L70
+ 06E0           X44:
+ 06E0           X20:
+ 06E0                   .dbline 475
+ 06E0           ;       {
+ 06E0                   .dbline 476
+ 06E0           ;                if(UpdateBegin>0)//接收主程序二进制数据
+ 06E0 80E0              ldi R24,0
+ 06E2 20901201          lds R2,_UpdateBegin
+ 06E6 8215              cp R24,R2
+ 06E8 08F0              brlo X45
+ 06EA C6C0              xjmp L72
+ 06EC           X45:
+ 06EC           X21:
+ 06EC                   .dbline 477
+ 06EC           ;        {        
+ 06EC                   .dbline 478
+ 06EC           ;                     SetTimer3();       //每收到一字节就重新开始定时500ms，超时后回到待命状态
+ 06EC 8ADE              xcall _SetTimer3
+ 06EE                   .dbline 480
+ 06EE           ;                                                                  
+ 06EE           ;                     flash_buf[DataReCn]=R_dat;
+ 06EE 80E0              ldi R24,<_flash_buf
+ 06F0 90E0              ldi R25,>_flash_buf
+ 06F2 E0911001          lds R30,_DataReCn
+ 06F6 F0911101          lds R31,_DataReCn+1
+ 06FA E80F              add R30,R24
+ 06FC F91F              adc R31,R25
+ 06FE 20902E01          lds R2,_R_dat
+ 0702 30902F01          lds R3,_R_dat+1
+ 0706 2082              std z+0,R2
+ 0708                   .dbline 481
+ 0708           ;                         DataReCn++;
+ 0708 80911001          lds R24,_DataReCn
+ 070C 90911101          lds R25,_DataReCn+1
+ 0710 0196              adiw R24,1
+ 0712 90931101          sts _DataReCn+1,R25
+ 0716 80931001          sts _DataReCn,R24
+ 071A                   .dbline 483
+ 071A           ;                         
+ 071A           ;                         if(UpdateBegin==2)//如果是采集板页写准备了，直接把这个字节丢给采集板
+ 071A 80911201          lds R24,_UpdateBegin
+ 071E 8230              cpi R24,2
+ 0720 39F4              brne L74
+ 0722           X22:
+ 0722                   .dbline 484
+ 0722           ;                         {
+ 0722           L76:
+ 0722                   .dbline 485
+ 0722           ;                           while(!(UCSR0A&(1<<UDRE0)));   // 等待发送缓冲器为空
+ 0722           L77:
+ 0722                   .dbline 485
+ 0722 5D9B              sbis 0xb,5
+ 0724 FECF              rjmp L76
+ 0726           X23:
+ 0726                   .dbline 486
+ 0726           ;                           UDR0=R_dat; 
+ 0726 20902E01          lds R2,_R_dat
+ 072A 30902F01          lds R3,_R_dat+1
+ 072E 2CB8              out 0xc,R2
+ 0730                   .dbline 487
+ 0730           ;                         }      
+ 0730           L74:
+ 0730                   .dbline 489
+ 0730           ;                          
+ 0730           ;                        if(DataReCn==258)//2字节页索引，256字节页数据
+ 0730 80911001          lds R24,_DataReCn
+ 0734 90911101          lds R25,_DataReCn+1
+ 0738 8230              cpi R24,2
+ 073A E1E0              ldi R30,1
+ 073C 9E07              cpc R25,R30
+ 073E 09F0              breq X46
+ 0740 59C2              xjmp L73
+ 0742           X46:
+ 0742           X24:
+ 0742                   .dbline 490
+ 0742           ;                        {
+ 0742                   .dbline 491
+ 0742           ;                          TCCR3B = 0x00; //stop  
+ 0742 2224              clr R2
+ 0744 20928A00          sts 138,R2
+ 0748                   .dbline 492
+ 0748           ;                          ETIMSK &= 0xfb;//关定时器3中断
+ 0748 80917D00          lds R24,125
+ 074C 8B7F              andi R24,251
+ 074E 80937D00          sts 125,R24
+ 0752                   .dbline 493
+ 0752           ;                          ETIFR|=0x04; //清定时器3中断标志 
+ 0752 80917C00          lds R24,124
+ 0756 8460              ori R24,4
+ 0758 80937C00          sts 124,R24
+ 075C                   .dbline 495
+ 075C           ;                                          
+ 075C           ;                          if(UpdateBegin==1)//如果是主控板页写准备了，则此时写入一页
+ 075C 80911201          lds R24,_UpdateBegin
+ 0760 8130              cpi R24,1
+ 0762 09F0              breq X47
+ 0764 5DC0              xjmp L81
+ 0766           X47:
+ 0766           X25:
+ 0766                   .dbline 496
+ 0766           ;                               {
+ 0766                   .dbline 497
+ 0766           ;                   address=flash_buf[0]*256+flash_buf[1];  
+ 0766 20910200          lds R18,_flash_buf
+ 076A 3327              clr R19
+ 076C 00E0              ldi R16,256
+ 076E 11E0              ldi R17,1
+ 0770 0E940000          xcall empy16s
+ 0774 1801              movw R2,R16
+ 0776 40900300          lds R4,_flash_buf+1
+ 077A 5524              clr R5
+ 077C 240C              add R2,R4
+ 077E 351C              adc R3,R5
+ 0780 4424              clr R4
+ 0782 37FC              sbrc R3,7
+ 0784 4094              com R4
+ 0786 5524              clr R5
+ 0788 47FC              sbrc R4,7
+ 078A 5094              com R5
+ 078C 30920100          sts _address+1,R3
+ 0790 20920000          sts _address,R2
+ 0794 50920300          sts _address+2+1,R5
+ 0798 40920200          sts _address+2,R4
+ 079C                   .dbline 498
+ 079C           ;                             address*=256;      
+ 079C 40E0              ldi R20,0
+ 079E 51E0              ldi R21,1
+ 07A0 60E0              ldi R22,0
+ 07A2 70E0              ldi R23,0
+ 07A4 5A92              st -y,R5
+ 07A6 4A92              st -y,R4
+ 07A8 3A92              st -y,R3
+ 07AA 2A92              st -y,R2
+ 07AC 8A01              movw R16,R20
+ 07AE 9B01              movw R18,R22
+ 07B0 0E940000          xcall empy32s
+ 07B4 10930100          sts _address+1,R17
+ 07B8 00930000          sts _address,R16
+ 07BC 30930300          sts _address+2+1,R19
+ 07C0 20930200          sts _address+2,R18
+ 07C4                   .dbline 500
+ 07C4           ;                                 
+ 07C4           ;                             if(address<0)
+ 07C4 40E0              ldi R20,0
+ 07C6 50E0              ldi R21,0
+ 07C8 60E0              ldi R22,0
+ 07CA 70E0              ldi R23,0
+ 07CC 0417              cp R16,R20
+ 07CE 1507              cpc R17,R21
+ 07D0 2607              cpc R18,R22
+ 07D2 3707              cpc R19,R23
+ 07D4 4CF4              brge L84
+ 07D6           X26:
+ 07D6                   .dbline 501
+ 07D6           ;                                 address=0;
+ 07D6 80E0              ldi R24,0
+ 07D8 80930000          sts _address+0,R24
+ 07DC 80930100          sts _address+1,R24
+ 07E0 80930200          sts _address+2,R24
+ 07E4 80930300          sts _address+3,R24
+ 07E8           L84:
+ 07E8                   .dbline 503
+ 07E8           ;                                
+ 07E8           ;                            if(address>0xff00)//对应页索引为255，这是最后一页能写的页，目前限制固件大小为64K字节
+ 07E8 40E0              ldi R20,0
+ 07EA 5FEF              ldi R21,255
+ 07EC 60E0              ldi R22,0
+ 07EE 70E0              ldi R23,0
+ 07F0 40900200          lds R4,_address+2
+ 07F4 50900300          lds R5,_address+2+1
+ 07F8 20900000          lds R2,_address
+ 07FC 30900100          lds R3,_address+1
+ 0800 4215              cp R20,R2
+ 0802 5305              cpc R21,R3
+ 0804 6405              cpc R22,R4
+ 0806 7505              cpc R23,R5
+ 0808 54F4              brge L86
+ 080A           X27:
+ 080A                   .dbline 504
+ 080A           ;                                address=0xff00;
+ 080A 80E0              ldi R24,0
+ 080C 80930000          sts _address+0,R24
+ 0810 80930200          sts _address+2,R24
+ 0814 80930300          sts _address+3,R24
+ 0818 8FEF              ldi R24,255
+ 081A 80930100          sts _address+1,R24
+ 081E           L86:
+ 081E                   .dbline 506
+ 081E           ;                               
+ 081E           ;                         write_one_page();     //约20ms    
+ 081E 15DC              xcall _write_one_page
+ 0820                   .dbline 507
+ 0820           ;                           }   
+ 0820           L81:
+ 0820                   .dbline 509
+ 0820           ;                                 
+ 0820           ;                          UpdateBegin=0;//一页写完了，下一页又从页写准备开始
+ 0820 2224              clr R2
+ 0822 20921201          sts _UpdateBegin,R2
+ 0826                   .dbline 511
+ 0826           ;                          
+ 0826           ;                          T_com=0x0f;        
+ 0826 8FE0              ldi R24,15
+ 0828 80932D01          sts _T_com,R24
+ 082C                   .dbline 512
+ 082C           ;                          crc16(flash_buf,258);//12ms
+ 082C 22E0              ldi R18,258
+ 082E 31E0              ldi R19,1
+ 0830 00E0              ldi R16,<_flash_buf
+ 0832 10E0              ldi R17,>_flash_buf
+ 0834 4BDD              xcall _crc16
+ 0836                   .dbline 513
+ 0836           ;                      T_dat=crc16hi;
+ 0836 20900F01          lds R2,_crc16hi
+ 083A 3324              clr R3
+ 083C 30923101          sts _T_dat+1,R3
+ 0840 20923001          sts _T_dat,R2
+ 0844                   .dbline 514
+ 0844           ;                          T_dat<<=8;
+ 0844 20903001          lds R2,_T_dat
+ 0848 30903101          lds R3,_T_dat+1
+ 084C 322C              mov R3,R2
+ 084E 2224              clr R2
+ 0850 30923101          sts _T_dat+1,R3
+ 0854 20923001          sts _T_dat,R2
+ 0858                   .dbline 515
+ 0858           ;                          T_dat|=crc16lo;
+ 0858 20900E01          lds R2,_crc16lo
+ 085C 3324              clr R3
+ 085E 40903001          lds R4,_T_dat
+ 0862 50903101          lds R5,_T_dat+1
+ 0866 4228              or R4,R2
+ 0868 5328              or R5,R3
+ 086A 50923101          sts _T_dat+1,R5
+ 086E 40923001          sts _T_dat,R4
+ 0872                   .dbline 516
+ 0872           ;                      Delay30Ms();
+ 0872 88D7              xcall _Delay30Ms
+ 0874                   .dbline 517
+ 0874           ;                SendManchester();      //将这一页的校验码上传给上位机，上位机判断后决定是继续烧写一页还是重烧这一页                            
+ 0874 2CD4              xcall _SendManchester
+ 0876                   .dbline 518
+ 0876           ;                        }               
+ 0876                   .dbline 519
+ 0876           ;            }
+ 0876 BEC1              xjmp L73
+ 0878           L72:
+ 0878                   .dbline 521
+ 0878           ;                else//若不是下发标定系数，则进入以下各个命令的子语句
+ 0878           ;                {
+ 0878                   .dbline 522
+ 0878           ;               switch(R_dat)
+ 0878 20902E01          lds R2,_R_dat
+ 087C 30902F01          lds R3,_R_dat+1
+ 0880 C101              movw R24,R2
+ 0882 8032              cpi R24,32
+ 0884 E0E0              ldi R30,0
+ 0886 9E07              cpc R25,R30
+ 0888 09F4              brne X48
+ 088A 42C0              xjmp L90
+ 088C           X48:
+ 088C           X28:
+ 088C 8032              cpi R24,32
+ 088E E0E0              ldi R30,0
+ 0890 9E07              cpc R25,R30
+ 0892 0CF4              brge X49
+ 0894 AFC1              xjmp L89
+ 0896           X49:
+ 0896           X29:
+ 0896           L106:
+ 0896 20902E01          lds R2,_R_dat
+ 089A 30902F01          lds R3,_R_dat+1
+ 089E C101              movw R24,R2
+ 08A0 803F              cpi R24,240
+ 08A2 E0E0              ldi R30,0
+ 08A4 9E07              cpc R25,R30
+ 08A6 09F4              brne X50
+ 08A8 3FC0              xjmp L91
+ 08AA           X50:
+ 08AA           X30:
+ 08AA 863F              cpi R24,246
+ 08AC E0E0              ldi R30,0
+ 08AE 9E07              cpc R25,R30
+ 08B0 09F4              brne X51
+ 08B2 B9C0              xjmp L95
+ 08B4           X51:
+ 08B4           X31:
+ 08B4 873F              cpi R24,247
+ 08B6 E0E0              ldi R30,0
+ 08B8 9E07              cpc R25,R30
+ 08BA 09F4              brne X52
+ 08BC 91C0              xjmp L94
+ 08BE           X52:
+ 08BE           X32:
+ 08BE 883F              cpi R24,248
+ 08C0 E0E0              ldi R30,0
+ 08C2 9E07              cpc R25,R30
+ 08C4 09F4              brne X53
+ 08C6 5FC0              xjmp L93
+ 08C8           X53:
+ 08C8           X33:
+ 08C8 893F              cpi R24,249
+ 08CA E0E0              ldi R30,0
+ 08CC 9E07              cpc R25,R30
+ 08CE 09F4              brne X54
+ 08D0 37C0              xjmp L92
+ 08D2           X54:
+ 08D2           X34:
+ 08D2 8A3F              cpi R24,250
+ 08D4 E0E0              ldi R30,0
+ 08D6 9E07              cpc R25,R30
+ 08D8 09F4              brne X55
+ 08DA CCC0              xjmp L97
+ 08DC           X55:
+ 08DC           X35:
+ 08DC 8B3F              cpi R24,251
+ 08DE E0E0              ldi R30,0
+ 08E0 9E07              cpc R25,R30
+ 08E2 09F4              brne X56
+ 08E4 D3C0              xjmp L98
+ 08E6           X56:
+ 08E6           X36:
+ 08E6 8C3F              cpi R24,252
+ 08E8 E0E0              ldi R30,0
+ 08EA 9E07              cpc R25,R30
+ 08EC 09F4              brne X57
+ 08EE F5C0              xjmp L100
+ 08F0           X57:
+ 08F0           X37:
+ 08F0 8D3F              cpi R24,253
+ 08F2 E0E0              ldi R30,0
+ 08F4 9E07              cpc R25,R30
+ 08F6 09F4              brne X58
+ 08F8 06C1              xjmp L101
+ 08FA           X58:
+ 08FA           X38:
+ 08FA 8E3F              cpi R24,254
+ 08FC E0E0              ldi R30,0
+ 08FE 9E07              cpc R25,R30
+ 0900 09F4              brne X59
+ 0902 32C1              xjmp L103
+ 0904           X59:
+ 0904           X39:
+ 0904 8F3F              cpi R24,255
+ 0906 E0E0              ldi R30,0
+ 0908 9E07              cpc R25,R30
+ 090A 09F4              brne X60
+ 090C 53C1              xjmp L105
+ 090E           X60:
+ 090E           X40:
+ 090E 72C1              xjmp L89
+ 0910           L90:
+ 0910                   .dbline 525
+ 0910           ;               {                       
+ 0910           ;                          case 0x20://读版本号  
+ 0910           ;                                          T_com=0x02;
+ 0910 82E0              ldi R24,2
+ 0912 80932D01          sts _T_com,R24
+ 0916                   .dbline 526
+ 0916           ;                                          T_dat=0x00;
+ 0916 2224              clr R2
+ 0918 3324              clr R3
+ 091A 30923101          sts _T_dat+1,R3
+ 091E 20923001          sts _T_dat,R2
+ 0922                   .dbline 527
+ 0922           ;                                          Delay30Ms();
+ 0922 30D7              xcall _Delay30Ms
+ 0924                   .dbline 528
+ 0924           ;                                          SendManchester();    
+ 0924 D4D3              xcall _SendManchester
+ 0926                   .dbline 529
+ 0926           ;                                          break;  
+ 0926 66C1              xjmp L89
+ 0928           L91:
+ 0928                   .dbline 532
+ 0928           ;                                          
+ 0928           ;                               case 0xf0://引导区握手
+ 0928           ;                                        T_com=0x0f;
+ 0928 8FE0              ldi R24,15
+ 092A 80932D01          sts _T_com,R24
+ 092E                   .dbline 533
+ 092E           ;                                    T_dat=0xe7ff;//上位机实收到的数,不用高低换位                                      
+ 092E 8FEF              ldi R24,59391
+ 0930 97EE              ldi R25,231
+ 0932 90933101          sts _T_dat+1,R25
+ 0936 80933001          sts _T_dat,R24
+ 093A                   .dbline 534
+ 093A           ;                                    Delay30Ms();
+ 093A 24D7              xcall _Delay30Ms
+ 093C                   .dbline 535
+ 093C           ;                                    SendManchester();  
+ 093C C8D3              xcall _SendManchester
+ 093E                   .dbline 536
+ 093E           ;                               break;
+ 093E 5AC1              xjmp L89
+ 0940           L92:
+ 0940                   .dbline 539
+ 0940           ;                               
+ 0940           ;                               case 0xf9://PIC握手，进入更新状态
+ 0940           ;                                        T_com=0x0f;
+ 0940 8FE0              ldi R24,15
+ 0942 80932D01          sts _T_com,R24
+ 0946                   .dbline 540
+ 0946           ;                                        SendUart0(0xf9,1);  
+ 0946 21E0              ldi R18,1
+ 0948 09EF              ldi R16,249
+ 094A 2BDD              xcall _SendUart0
+ 094C                   .dbline 541
+ 094C           ;                                        T_dat=0xe7;
+ 094C 87EE              ldi R24,231
+ 094E 90E0              ldi R25,0
+ 0950 90933101          sts _T_dat+1,R25
+ 0954 80933001          sts _T_dat,R24
+ 0958                   .dbline 542
+ 0958           ;                                        T_dat<<=8;     
+ 0958 1C01              movw R2,R24
+ 095A 322C              mov R3,R2
+ 095C 2224              clr R2
+ 095E 30923101          sts _T_dat+1,R3
+ 0962 20923001          sts _T_dat,R2
+ 0966                   .dbline 543
+ 0966           ;                                        T_dat|=Uart0RxData[0];//成功的话应返回0xf9
+ 0966 20900701          lds R2,_Uart0RxData
+ 096A 3324              clr R3
+ 096C 40903001          lds R4,_T_dat
+ 0970 50903101          lds R5,_T_dat+1
+ 0974 4228              or R4,R2
+ 0976 5328              or R5,R3
+ 0978 50923101          sts _T_dat+1,R5
+ 097C 40923001          sts _T_dat,R4
+ 0980                   .dbline 544
+ 0980           ;                                        Delay30Ms();
+ 0980 01D7              xcall _Delay30Ms
+ 0982                   .dbline 545
+ 0982           ;                                        SendManchester(); 
+ 0982 A5D3              xcall _SendManchester
+ 0984                   .dbline 546
+ 0984           ;                               break;
+ 0984 37C1              xjmp L89
+ 0986           L93:
+ 0986                   .dbline 549
+ 0986           ;                               
+ 0986           ;                               case 0xf8://PIC页写准备                      
+ 0986           ;                                        T_com=0x0f;
+ 0986 8FE0              ldi R24,15
+ 0988 80932D01          sts _T_com,R24
+ 098C                   .dbline 550
+ 098C           ;                                        SendUart0(0xf8,1);//块写FLASHE准备             
+ 098C 21E0              ldi R18,1
+ 098E 08EF              ldi R16,248
+ 0990 08DD              xcall _SendUart0
+ 0992                   .dbline 551
+ 0992           ;                                    T_dat=0xe7;
+ 0992 87EE              ldi R24,231
+ 0994 90E0              ldi R25,0
+ 0996 90933101          sts _T_dat+1,R25
+ 099A 80933001          sts _T_dat,R24
+ 099E                   .dbline 552
+ 099E           ;                                        T_dat<<=8;
+ 099E 1C01              movw R2,R24
+ 09A0 322C              mov R3,R2
+ 09A2 2224              clr R2
+ 09A4 30923101          sts _T_dat+1,R3
+ 09A8 20923001          sts _T_dat,R2
+ 09AC                   .dbline 553
+ 09AC           ;                                        T_dat|=Uart0RxData[0];//正常情况下应是0xf8  
+ 09AC 20900701          lds R2,_Uart0RxData
+ 09B0 3324              clr R3
+ 09B2 40903001          lds R4,_T_dat
+ 09B6 50903101          lds R5,_T_dat+1
+ 09BA 4228              or R4,R2
+ 09BC 5328              or R5,R3
+ 09BE 50923101          sts _T_dat+1,R5
+ 09C2 40923001          sts _T_dat,R4
+ 09C6                   .dbline 554
+ 09C6           ;                                    Delay30Ms();
+ 09C6 DED6              xcall _Delay30Ms
+ 09C8                   .dbline 555
+ 09C8           ;                                    SendManchester(); 
+ 09C8 82D3              xcall _SendManchester
+ 09CA                   .dbline 556
+ 09CA           ;                                        UpdateBegin=2;//页写准备，共64K字节程序空间
+ 09CA 82E0              ldi R24,2
+ 09CC 80931201          sts _UpdateBegin,R24
+ 09D0                   .dbline 557
+ 09D0           ;                                        DataReCn=0;
+ 09D0 2224              clr R2
+ 09D2 3324              clr R3
+ 09D4 30921101          sts _DataReCn+1,R3
+ 09D8 20921001          sts _DataReCn,R2
+ 09DC                   .dbline 558
+ 09DC           ;                                    SetTimer3();
+ 09DC 12DD              xcall _SetTimer3
+ 09DE                   .dbline 559
+ 09DE           ;                               break;
+ 09DE 0AC1              xjmp L89
+ 09E0           L94:
+ 09E0                   .dbline 562
+ 09E0           ;                               
+ 09E0           ;                               case 0xf7://PIC版本号
+ 09E0           ;                                        T_com=0x0f;
+ 09E0 8FE0              ldi R24,15
+ 09E2 80932D01          sts _T_com,R24
+ 09E6                   .dbline 563
+ 09E6           ;                                        SendUart0(0xf7,1);  
+ 09E6 21E0              ldi R18,1
+ 09E8 07EF              ldi R16,247
+ 09EA DBDC              xcall _SendUart0
+ 09EC                   .dbline 564
+ 09EC           ;                                        T_dat=0xe7;
+ 09EC 87EE              ldi R24,231
+ 09EE 90E0              ldi R25,0
+ 09F0 90933101          sts _T_dat+1,R25
+ 09F4 80933001          sts _T_dat,R24
+ 09F8                   .dbline 565
+ 09F8           ;                                        T_dat<<=8;     
+ 09F8 1C01              movw R2,R24
+ 09FA 322C              mov R3,R2
+ 09FC 2224              clr R2
+ 09FE 30923101          sts _T_dat+1,R3
+ 0A02 20923001          sts _T_dat,R2
+ 0A06                   .dbline 566
+ 0A06           ;                                        T_dat|=Uart0RxData[0];//成功的话应返回0x00
+ 0A06 20900701          lds R2,_Uart0RxData
+ 0A0A 3324              clr R3
+ 0A0C 40903001          lds R4,_T_dat
+ 0A10 50903101          lds R5,_T_dat+1
+ 0A14 4228              or R4,R2
+ 0A16 5328              or R5,R3
+ 0A18 50923101          sts _T_dat+1,R5
+ 0A1C 40923001          sts _T_dat,R4
+ 0A20                   .dbline 567
+ 0A20           ;                                        Delay30Ms();
+ 0A20 B1D6              xcall _Delay30Ms
+ 0A22                   .dbline 568
+ 0A22           ;                                        SendManchester(); 
+ 0A22 55D3              xcall _SendManchester
+ 0A24                   .dbline 569
+ 0A24           ;                               break;
+ 0A24 E7C0              xjmp L89
+ 0A26           L95:
+ 0A26                   .dbline 572
+ 0A26           ;                                       
+ 0A26           ;                               case 0xf6://DSP版本号
+ 0A26           ;                                        T_com=0x0f;
+ 0A26 8FE0              ldi R24,15
+ 0A28 80932D01          sts _T_com,R24
+ 0A2C                   .dbline 573
+ 0A2C           ;                                        SendUart0(0xf6,1);  
+ 0A2C 21E0              ldi R18,1
+ 0A2E 06EF              ldi R16,246
+ 0A30 B8DC              xcall _SendUart0
+ 0A32                   .dbline 574
+ 0A32           ;                                         T_dat=Uart0RxData[0];//成功的话应返回0xe7
+ 0A32 20900701          lds R2,_Uart0RxData
+ 0A36 3324              clr R3
+ 0A38 30923101          sts _T_dat+1,R3
+ 0A3C 20923001          sts _T_dat,R2
+ 0A40                   .dbline 575
+ 0A40           ;                                        T_dat<<=8;     
+ 0A40 20903001          lds R2,_T_dat
+ 0A44 30903101          lds R3,_T_dat+1
+ 0A48 322C              mov R3,R2
+ 0A4A 2224              clr R2
+ 0A4C 30923101          sts _T_dat+1,R3
+ 0A50 20923001          sts _T_dat,R2
+ 0A54                   .dbline 576
+ 0A54           ;                                        T_dat|=Uart0RxData[1];//成功的话应返回0x00
+ 0A54 20900801          lds R2,_Uart0RxData+1
+ 0A58 3324              clr R3
+ 0A5A 40903001          lds R4,_T_dat
+ 0A5E 50903101          lds R5,_T_dat+1
+ 0A62 4228              or R4,R2
+ 0A64 5328              or R5,R3
+ 0A66 50923101          sts _T_dat+1,R5
+ 0A6A 40923001          sts _T_dat,R4
+ 0A6E                   .dbline 577
+ 0A6E           ;                                        Delay30Ms();
+ 0A6E 8AD6              xcall _Delay30Ms
+ 0A70                   .dbline 578
+ 0A70           ;                                        SendManchester(); 
+ 0A70 2ED3              xcall _SendManchester
+ 0A72                   .dbline 579
+ 0A72           ;                               break;
+ 0A72 C0C0              xjmp L89
+ 0A74           L97:
+ 0A74                   .dbline 583
+ 0A74           ;                                  
+ 0A74           ;                          case 0xfa://主控板握手，进入更新状态
+ 0A74           ;                                   // SendUart0(0xb5,1);
+ 0A74           ;                                        T_com=0x0f;
+ 0A74 8FE0              ldi R24,15
+ 0A76 80932D01          sts _T_com,R24
+ 0A7A                   .dbline 584
+ 0A7A           ;                                    T_dat=0xe7fa;//上位机实收到的数,不用高低换位                                      
+ 0A7A 8AEF              ldi R24,59386
+ 0A7C 97EE              ldi R25,231
+ 0A7E 90933101          sts _T_dat+1,R25
+ 0A82 80933001          sts _T_dat,R24
+ 0A86                   .dbline 585
+ 0A86           ;                                    Delay30Ms();
+ 0A86 7ED6              xcall _Delay30Ms
+ 0A88                   .dbline 586
+ 0A88           ;                                    SendManchester();  
+ 0A88 22D3              xcall _SendManchester
+ 0A8A                   .dbline 587
+ 0A8A           ;                               break;
+ 0A8A B4C0              xjmp L89
+ 0A8C           L98:
+ 0A8C                   .dbline 590
+ 0A8C           ;                               
+ 0A8C           ;                          case 0xfb://DSP握手，进入更新状态
+ 0A8C           ;                                        T_com=0x0f;
+ 0A8C 8FE0              ldi R24,15
+ 0A8E 80932D01          sts _T_com,R24
+ 0A92                   .dbline 591
+ 0A92           ;                                        SendUart0(0xb5,1);  
+ 0A92 21E0              ldi R18,1
+ 0A94 05EB              ldi R16,181
+ 0A96 85DC              xcall _SendUart0
+ 0A98                   .dbline 592
+ 0A98           ;                                        T_dat=Uart0RxData[0];//成功的话应返回0xe7fb
+ 0A98 20900701          lds R2,_Uart0RxData
+ 0A9C 3324              clr R3
+ 0A9E 30923101          sts _T_dat+1,R3
+ 0AA2 20923001          sts _T_dat,R2
+ 0AA6                   .dbline 593
+ 0AA6           ;                                        T_dat<<=8;     
+ 0AA6 20903001          lds R2,_T_dat
+ 0AAA 30903101          lds R3,_T_dat+1
+ 0AAE 322C              mov R3,R2
+ 0AB0 2224              clr R2
+ 0AB2 30923101          sts _T_dat+1,R3
+ 0AB6 20923001          sts _T_dat,R2
+ 0ABA                   .dbline 594
+ 0ABA           ;                                        T_dat|=Uart0RxData[1];
+ 0ABA 20900801          lds R2,_Uart0RxData+1
+ 0ABE 3324              clr R3
+ 0AC0 40903001          lds R4,_T_dat
+ 0AC4 50903101          lds R5,_T_dat+1
+ 0AC8 4228              or R4,R2
+ 0ACA 5328              or R5,R3
+ 0ACC 50923101          sts _T_dat+1,R5
+ 0AD0 40923001          sts _T_dat,R4
+ 0AD4                   .dbline 595
+ 0AD4           ;                                        Delay30Ms();
+ 0AD4 57D6              xcall _Delay30Ms
+ 0AD6                   .dbline 596
+ 0AD6           ;                                        SendManchester(); 
+ 0AD6 FBD2              xcall _SendManchester
+ 0AD8                   .dbline 597
+ 0AD8           ;                               break;  
+ 0AD8 8DC0              xjmp L89
+ 0ADA           L100:
+ 0ADA                   .dbline 600
+ 0ADA           ;                                                                       
+ 0ADA           ;                               case 0xfc://主控板页写准备                           
+ 0ADA           ;                                        T_com=0x0f;
+ 0ADA 8FE0              ldi R24,15
+ 0ADC 80932D01          sts _T_com,R24
+ 0AE0                   .dbline 601
+ 0AE0           ;                                    T_dat=0xe7fc;//上位机实收到的数,不用高低换位
+ 0AE0 8CEF              ldi R24,59388
+ 0AE2 97EE              ldi R25,231
+ 0AE4 90933101          sts _T_dat+1,R25
+ 0AE8 80933001          sts _T_dat,R24
+ 0AEC                   .dbline 602
+ 0AEC           ;                                    Delay30Ms();
+ 0AEC 4BD6              xcall _Delay30Ms
+ 0AEE                   .dbline 603
+ 0AEE           ;                                    SendManchester(); 
+ 0AEE EFD2              xcall _SendManchester
+ 0AF0                   .dbline 604
+ 0AF0           ;                                        UpdateBegin=1;//页写准备，主控板从页索引0开始烧写，最大页索引255，共64K字节程序空间
+ 0AF0 81E0              ldi R24,1
+ 0AF2 80931201          sts _UpdateBegin,R24
+ 0AF6                   .dbline 605
+ 0AF6           ;                                        DataReCn=0;
+ 0AF6 2224              clr R2
+ 0AF8 3324              clr R3
+ 0AFA 30921101          sts _DataReCn+1,R3
+ 0AFE 20921001          sts _DataReCn,R2
+ 0B02                   .dbline 606
+ 0B02           ;                                    SetTimer3();//开始计时，每500ms内至少要有一个字节收到
+ 0B02 7FDC              xcall _SetTimer3
+ 0B04                   .dbline 607
+ 0B04           ;                               break;
+ 0B04 77C0              xjmp L89
+ 0B06           L101:
+ 0B06                   .dbline 610
+ 0B06           ;                                                                                       
+ 0B06           ;                               case 0xfd://DSP页写准备                      
+ 0B06           ;                                        T_com=0x0f;
+ 0B06 8FE0              ldi R24,15
+ 0B08 80932D01          sts _T_com,R24
+ 0B0C                   .dbline 611
+ 0B0C           ;                                        SendUart0(0xb7,1);//块写FLASHE准备             
+ 0B0C 21E0              ldi R18,1
+ 0B0E 07EB              ldi R16,183
+ 0B10 48DC              xcall _SendUart0
+ 0B12                   .dbline 612
+ 0B12           ;                                    T_dat=Uart0RxData[0];//高字节，正常情况下应是0xe7
+ 0B12 20900701          lds R2,_Uart0RxData
+ 0B16 3324              clr R3
+ 0B18 30923101          sts _T_dat+1,R3
+ 0B1C 20923001          sts _T_dat,R2
+ 0B20                   .dbline 613
+ 0B20           ;                                        T_dat<<=8;
+ 0B20 20903001          lds R2,_T_dat
+ 0B24 30903101          lds R3,_T_dat+1
+ 0B28 322C              mov R3,R2
+ 0B2A 2224              clr R2
+ 0B2C 30923101          sts _T_dat+1,R3
+ 0B30 20923001          sts _T_dat,R2
+ 0B34                   .dbline 614
+ 0B34           ;                                        T_dat|=Uart0RxData[1];//低字节,正常情况下应是0xfd   
+ 0B34 20900801          lds R2,_Uart0RxData+1
+ 0B38 3324              clr R3
+ 0B3A 40903001          lds R4,_T_dat
+ 0B3E 50903101          lds R5,_T_dat+1
+ 0B42 4228              or R4,R2
+ 0B44 5328              or R5,R3
+ 0B46 50923101          sts _T_dat+1,R5
+ 0B4A 40923001          sts _T_dat,R4
+ 0B4E                   .dbline 615
+ 0B4E           ;                                    Delay30Ms();
+ 0B4E 1AD6              xcall _Delay30Ms
+ 0B50                   .dbline 616
+ 0B50           ;                                    SendManchester(); 
+ 0B50 BED2              xcall _SendManchester
+ 0B52                   .dbline 617
+ 0B52           ;                                        UpdateBegin=2;//页写准备，采集板从页索引479开始往前烧写，最小页索引224，共64K字节程序空间
+ 0B52 82E0              ldi R24,2
+ 0B54 80931201          sts _UpdateBegin,R24
+ 0B58                   .dbline 618
+ 0B58           ;                                        DataReCn=0;
+ 0B58 2224              clr R2
+ 0B5A 3324              clr R3
+ 0B5C 30921101          sts _DataReCn+1,R3
+ 0B60 20921001          sts _DataReCn,R2
+ 0B64                   .dbline 619
+ 0B64           ;                                    SetTimer3();
+ 0B64 4EDC              xcall _SetTimer3
+ 0B66                   .dbline 620
+ 0B66           ;                               break;
+ 0B66 46C0              xjmp L89
+ 0B68           L103:
+ 0B68                   .dbline 623
+ 0B68           ;                               
+ 0B68           ;                               case 0xfe://DSP擦除，上位机设总超时6秒                       
+ 0B68           ;                                         SendUart0(0xb6,0);//擦除FLASHE,2秒超时 ,擦除FLASHD,2秒超时 ，共5.5秒超时                               
+ 0B68 2227              clr R18
+ 0B6A 06EB              ldi R16,182
+ 0B6C 1ADC              xcall _SendUart0
+ 0B6E                   .dbline 624
+ 0B6E           ;                                         T_dat=Uart0RxData[0];//擦除成功的话应返回0xe7
+ 0B6E 20900701          lds R2,_Uart0RxData
+ 0B72 3324              clr R3
+ 0B74 30923101          sts _T_dat+1,R3
+ 0B78 20923001          sts _T_dat,R2
+ 0B7C                   .dbline 625
+ 0B7C           ;                                         T_dat<<=8;                                     
+ 0B7C 20903001          lds R2,_T_dat
+ 0B80 30903101          lds R3,_T_dat+1
+ 0B84 322C              mov R3,R2
+ 0B86 2224              clr R2
+ 0B88 30923101          sts _T_dat+1,R3
+ 0B8C 20923001          sts _T_dat,R2
+ 0B90                   .dbline 626
+ 0B90           ;                                         T_dat|=Uart0RxData[1];//擦除成功的话应返回0xfe                                   
+ 0B90 20900801          lds R2,_Uart0RxData+1
+ 0B94 3324              clr R3
+ 0B96 40903001          lds R4,_T_dat
+ 0B9A 50903101          lds R5,_T_dat+1
+ 0B9E 4228              or R4,R2
+ 0BA0 5328              or R5,R3
+ 0BA2 50923101          sts _T_dat+1,R5
+ 0BA6 40923001          sts _T_dat,R4
+ 0BAA                   .dbline 627
+ 0BAA           ;                                         T_com=0x0f;
+ 0BAA 8FE0              ldi R24,15
+ 0BAC 80932D01          sts _T_com,R24
+ 0BB0                   .dbline 628
+ 0BB0           ;                                         SendManchester();     //上传擦除结果                                                                  
+ 0BB0 8ED2              xcall _SendManchester
+ 0BB2                   .dbline 629
+ 0BB2           ;                               break;  
+ 0BB2 20C0              xjmp L89
+ 0BB4           L105:
+ 0BB4                   .dbline 632
+ 0BB4           ;                               
+ 0BB4           ;                               case 0xff://退出更新状态，运行正常程序
+ 0BB4           ;                                SendUart0(0xb8,1);
+ 0BB4 21E0              ldi R18,1
+ 0BB6 08EB              ldi R16,184
+ 0BB8 F4DB              xcall _SendUart0
+ 0BBA                   .dbline 633
+ 0BBA           ;                                T_dat=Uart0RxData[0];//成功的话应返回0xe7
+ 0BBA 20900701          lds R2,_Uart0RxData
+ 0BBE 3324              clr R3
+ 0BC0 30923101          sts _T_dat+1,R3
+ 0BC4 20923001          sts _T_dat,R2
+ 0BC8                   .dbline 634
+ 0BC8           ;                                T_dat<<=8; 
+ 0BC8 20903001          lds R2,_T_dat
+ 0BCC 30903101          lds R3,_T_dat+1
+ 0BD0 322C              mov R3,R2
+ 0BD2 2224              clr R2
+ 0BD4 30923101          sts _T_dat+1,R3
+ 0BD8 20923001          sts _T_dat,R2
+ 0BDC                   .dbline 635
+ 0BDC           ;                                T_dat|=0xff;
+ 0BDC C101              movw R24,R2
+ 0BDE 8F6F              ori R24,255
+ 0BE0 90933101          sts _T_dat+1,R25
+ 0BE4 80933001          sts _T_dat,R24
+ 0BE8                   .dbline 636
+ 0BE8           ;                                T_com=0x0f;
+ 0BE8 8FE0              ldi R24,15
+ 0BEA 80932D01          sts _T_com,R24
+ 0BEE                   .dbline 637
+ 0BEE           ;                                Delay30Ms();
+ 0BEE CAD5              xcall _Delay30Ms
+ 0BF0                   .dbline 638
+ 0BF0           ;                                SendManchester();      //上传擦除结果          
+ 0BF0 6ED2              xcall _SendManchester
+ 0BF2                   .dbline 639
+ 0BF2           ;                                quit();
+ 0BF2 8BDA              xcall _quit
+ 0BF4                   .dbline 640
+ 0BF4           ;                               break;
+ 0BF4                   .dbline 643
+ 0BF4           ; 
+ 0BF4           ;                               default:
+ 0BF4           ;                               break;
+ 0BF4           L89:
+ 0BF4                   .dbline 645
+ 0BF4           ;                   }//switch(R_dat&0xf0)
+ 0BF4           ;            }//UpdateBegin
+ 0BF4           L73:
+ 0BF4                   .dbline 646
+ 0BF4           ;                IntFlag=0;
+ 0BF4 2224              clr R2
+ 0BF6 20921501          sts _IntFlag,R2
+ 0BFA                   .dbline 647
+ 0BFA           ;        EIFR|=0x08;//清INT3中断标志 
+ 0BFA 88B7              in R24,0x38
+ 0BFC 8860              ori R24,8
+ 0BFE 88BF              out 0x38,R24
+ 0C00                   .dbline 648
+ 0C00           ;                EICRA|=0xc0; //INT3上升沿触发 
+ 0C00 80916A00          lds R24,106
+ 0C04 806C              ori R24,192
+ 0C06 80936A00          sts 106,R24
+ 0C0A                   .dbline 649
+ 0C0A           ;                EIMSK|=0x08;//使能INT3中断 
+ 0C0A 89B7              in R24,0x39
+ 0C0C 8860              ori R24,8
+ 0C0E 89BF              out 0x39,R24
+ 0C10                   .dbline 650
+ 0C10           ;        }//IntFlag
+ 0C10           L70:
+ 0C10           L69:
+ 0C10                   .dbline 651
+ 0C10           ;     }//while(1)
+ 0C10           L66:
+ 0C10                   .dbline 465
+ 0C10 4FCD              xjmp L65
+ 0C12           X41:
+ 0C12                   .dbline -2
+ 0C12           L47:
+ 0C12                   .dbline 0 ; func end
+ 0C12 0895              ret
+ 0C14                   .dbsym l t 1 c
+ 0C14                   .dbsym l k 1 i
+ 0C14                   .dbsym l j 1 i
+ 0C14                   .dbsym l i 1 i
+ 0C14                   .dbend
+                        .area vector(rom, abs)
+                        .org 16
+ 0010 0C940A06          jmp _int3_isr
+                        .area text(rom, con, rel)
+ 0C14                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 0C14                   .dbfunc e int3_isr _int3_isr fV
+                        .even
+ 0C14           _int3_isr::
+ 0C14 2A92              st -y,R2
+ 0C16 3A92              st -y,R3
+ 0C18 0A93              st -y,R16
+ 0C1A 1A93              st -y,R17
+ 0C1C 8A93              st -y,R24
+ 0C1E 9A93              st -y,R25
+ 0C20 AA93              st -y,R26
+ 0C22 EA93              st -y,R30
+ 0C24 FA93              st -y,R31
+ 0C26 2FB6              IN R2,63
+ 0C28 2A92              st -y,R2
+ 0C2A                   .dbline -1
+ 0C2A                   .dbline 659
+ 0C2A           ;  
+ 0C2A           ; }
+ 0C2A           ; 
+ 0C2A           ; 
+ 0C2A           ; 
+ 0C2A           ; #pragma interrupt_handler int3_isr:iv_INT3
+ 0C2A           ; void int3_isr(void)//外部中断3
+ 0C2A           ; { 
+ 0C2A                   .dbline 660
+ 0C2A           ;    SREG&=0x7f;//关总中断
+ 0C2A 8FB7              in R24,0x3f
+ 0C2C 8F77              andi R24,127
+ 0C2E 8FBF              out 0x3f,R24
+ 0C30                   .dbline 661
+ 0C30           ;    EIMSK&=0xF7;//关INT3  
+ 0C30 89B7              in R24,0x39
+ 0C32 877F              andi R24,247
+ 0C34 89BF              out 0x39,R24
+ 0C36                   .dbline 662
+ 0C36           ;    TCCR2 = 0x00; //stop
+ 0C36 2224              clr R2
+ 0C38 25BC              out 0x25,R2
+ 0C3A                   .dbline 664
+ 0C3A           ;   
+ 0C3A           ;   DELAY10
+ 0C3A 3324              clr R3
+ 0C3C 30921401          sts _Tt+1,R3
+ 0C40 20921301          sts _Tt,R2
+ 0C44 09C0              xjmp L111
+ 0C46           L108:
+ 0C46                   .dbline 664
+ 0C46           L109:
+ 0C46                   .dbline 664
+ 0C46 80911301          lds R24,_Tt
+ 0C4A 90911401          lds R25,_Tt+1
+ 0C4E 0196              adiw R24,1
+ 0C50 90931401          sts _Tt+1,R25
+ 0C54 80931301          sts _Tt,R24
+ 0C58           L111:
+ 0C58                   .dbline 664
+ 0C58 80911301          lds R24,_Tt
+ 0C5C 90911401          lds R25,_Tt+1
+ 0C60 8430              cpi R24,4
+ 0C62 E0E0              ldi R30,0
+ 0C64 9E07              cpc R25,R30
+ 0C66 78F3              brlo L108
+ 0C68           X61:
+ 0C68                   .dbline 665
+ 0C68           ;   EIFR|=0x08;//清INT3中断标志 
+ 0C68 88B7              in R24,0x38
+ 0C6A 8860              ori R24,8
+ 0C6C 88BF              out 0x38,R24
+ 0C6E                   .dbline 666
+ 0C6E           ;   if((PIND&0x08)==0x00)//高脉冲不足10us则直接跳出
+ 0C6E 8399              sbic 0x10,3
+ 0C70 01C0              rjmp L112
+ 0C72           X62:
+ 0C72                   .dbline 667
+ 0C72           ;   {
+ 0C72                   .dbline 668
+ 0C72           ;    goto End;
+ 0C72 CDC1              xjmp L114
+ 0C74           L112:
+ 0C74                   .dbline 671
+ 0C74           ;   }
+ 0C74           ;    
+ 0C74           ;    TCNT2 = 0x00;  
+ 0C74 2224              clr R2
+ 0C76 24BC              out 0x24,R2
+ 0C78                   .dbline 672
+ 0C78           ;    TCCR2 = 0x03; //64分频,8M时钟，每个CLOCK耗时8us，最大定时2048us，每周期10个计数
+ 0C78 83E0              ldi R24,3
+ 0C7A 85BD              out 0x25,R24
+ 0C7C 29C0              xjmp L116
+ 0C7E           L115:
+ 0C7E                   .dbline 675
+ 0C7E           ;    
+ 0C7E           ;    while(1)
+ 0C7E           ;    {
+ 0C7E                   .dbline 676
+ 0C7E           ;      T2cn=TCNT2;
+ 0C7E 24B4              in R2,0x24
+ 0C80 3324              clr R3
+ 0C82 30920100          sts _T2cn+1,R3
+ 0C86 20920000          sts _T2cn,R2
+ 0C8A                   .dbline 677
+ 0C8A           ;         if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+ 0C8A 80E5              ldi R24,80
+ 0C8C 90E0              ldi R25,0
+ 0C8E 8215              cp R24,R2
+ 0C90 9305              cpc R25,R3
+ 0C92 08F4              brsh L118
+ 0C94           X63:
+ 0C94                   .dbline 678
+ 0C94           ;         {
+ 0C94                   .dbline 679
+ 0C94           ;           goto End;
+ 0C94 BCC1              xjmp L114
+ 0C96           L118:
+ 0C96                   .dbline 681
+ 0C96           ;         }
+ 0C96           ;      if((PIND&0x08)==0x00)
+ 0C96 8399              sbic 0x10,3
+ 0C98 1BC0              rjmp L120
+ 0C9A           X64:
+ 0C9A                   .dbline 682
+ 0C9A           ;        {
+ 0C9A                   .dbline 683
+ 0C9A           ;          DELAY20
+ 0C9A 2224              clr R2
+ 0C9C 3324              clr R3
+ 0C9E 30921401          sts _Tt+1,R3
+ 0CA2 20921301          sts _Tt,R2
+ 0CA6 09C0              xjmp L125
+ 0CA8           L122:
+ 0CA8                   .dbline 683
+ 0CA8           L123:
+ 0CA8                   .dbline 683
+ 0CA8 80911301          lds R24,_Tt
+ 0CAC 90911401          lds R25,_Tt+1
+ 0CB0 0196              adiw R24,1
+ 0CB2 90931401          sts _Tt+1,R25
+ 0CB6 80931301          sts _Tt,R24
+ 0CBA           L125:
+ 0CBA                   .dbline 683
+ 0CBA 80911301          lds R24,_Tt
+ 0CBE 90911401          lds R25,_Tt+1
+ 0CC2 8830              cpi R24,8
+ 0CC4 E0E0              ldi R30,0
+ 0CC6 9E07              cpc R25,R30
+ 0CC8 78F3              brlo L122
+ 0CCA           X65:
+ 0CCA                   .dbline 684
+ 0CCA           ;          if((PIND&0x08)==0x00)
+ 0CCA 8399              sbic 0x10,3
+ 0CCC 01C0              rjmp L126
+ 0CCE           X66:
+ 0CCE                   .dbline 685
+ 0CCE           ;           {
+ 0CCE                   .dbline 686
+ 0CCE           ;             break;
+ 0CCE 31C0              xjmp L129
+ 0CD0           L126:
+ 0CD0                   .dbline 688
+ 0CD0           ;           }
+ 0CD0           ;        }
+ 0CD0           L120:
+ 0CD0                   .dbline 689
+ 0CD0           ;    }
+ 0CD0           L116:
+ 0CD0                   .dbline 674
+ 0CD0 D6CF              xjmp L115
+ 0CD2           L128:
+ 0CD2                   .dbline 693
+ 0CD2           ;                  
+ 0CD2           ;     //开始判断同步头  
+ 0CD2           ;       while(1)//还没有上升沿到来,死等
+ 0CD2           ;       {
+ 0CD2                   .dbline 694
+ 0CD2           ;         T2cn=TCNT2;
+ 0CD2 24B4              in R2,0x24
+ 0CD4 3324              clr R3
+ 0CD6 30920100          sts _T2cn+1,R3
+ 0CDA 20920000          sts _T2cn,R2
+ 0CDE                   .dbline 695
+ 0CDE           ;         if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+ 0CDE 80E5              ldi R24,80
+ 0CE0 90E0              ldi R25,0
+ 0CE2 8215              cp R24,R2
+ 0CE4 9305              cpc R25,R3
+ 0CE6 08F4              brsh L131
+ 0CE8           X67:
+ 0CE8                   .dbline 696
+ 0CE8           ;         {
+ 0CE8                   .dbline 697
+ 0CE8           ;           goto End;
+ 0CE8 92C1              xjmp L114
+ 0CEA           L131:
+ 0CEA                   .dbline 699
+ 0CEA           ;         }
+ 0CEA           ;         if((EIFR&0x08)==0x08)
+ 0CEA 88B7              in R24,0x38
+ 0CEC 8870              andi R24,8
+ 0CEE 8830              cpi R24,8
+ 0CF0 01F5              brne L133
+ 0CF2           X68:
+ 0CF2                   .dbline 700
+ 0CF2           ;         {
+ 0CF2                   .dbline 701
+ 0CF2           ;          DELAY10
+ 0CF2 2224              clr R2
+ 0CF4 3324              clr R3
+ 0CF6 30921401          sts _Tt+1,R3
+ 0CFA 20921301          sts _Tt,R2
+ 0CFE 09C0              xjmp L138
+ 0D00           L135:
+ 0D00                   .dbline 701
+ 0D00           L136:
+ 0D00                   .dbline 701
+ 0D00 80911301          lds R24,_Tt
+ 0D04 90911401          lds R25,_Tt+1
+ 0D08 0196              adiw R24,1
+ 0D0A 90931401          sts _Tt+1,R25
+ 0D0E 80931301          sts _Tt,R24
+ 0D12           L138:
+ 0D12                   .dbline 701
+ 0D12 80911301          lds R24,_Tt
+ 0D16 90911401          lds R25,_Tt+1
+ 0D1A 8430              cpi R24,4
+ 0D1C E0E0              ldi R30,0
+ 0D1E 9E07              cpc R25,R30
+ 0D20 78F3              brlo L135
+ 0D22           X69:
+ 0D22                   .dbline 702
+ 0D22           ;          EIFR|=0x08;//清INT3中断标志 
+ 0D22 88B7              in R24,0x38
+ 0D24 8860              ori R24,8
+ 0D26 88BF              out 0x38,R24
+ 0D28                   .dbline 703
+ 0D28           ;          if((PIND&0x08)==0x08)//高脉冲维持了10us，则认为是下一个有效上升沿到来
+ 0D28 80B3              in R24,0x10
+ 0D2A 8870              andi R24,8
+ 0D2C 8830              cpi R24,8
+ 0D2E 09F4              brne L139
+ 0D30           X70:
+ 0D30                   .dbline 704
+ 0D30           ;            {
+ 0D30                   .dbline 705
+ 0D30           ;            break;
+ 0D30 01C0              xjmp L130
+ 0D32           L139:
+ 0D32                   .dbline 707
+ 0D32           ;                }
+ 0D32           ;         }  
+ 0D32           L133:
+ 0D32                   .dbline 708
+ 0D32           ;       }
+ 0D32           L129:
+ 0D32                   .dbline 692
+ 0D32 CFCF              xjmp L128
+ 0D34           L130:
+ 0D34                   .dbline 709
+ 0D34           ;       T2cn=TCNT2;
+ 0D34 24B4              in R2,0x24
+ 0D36 3324              clr R3
+ 0D38 30920100          sts _T2cn+1,R3
+ 0D3C 20920000          sts _T2cn,R2
+ 0D40                   .dbline 710
+ 0D40           ;       TCNT2=0;
+ 0D40 2224              clr R2
+ 0D42 24BC              out 0x24,R2
+ 0D44                   .dbline 711
+ 0D44           ;       if((T2cn<60)||(T2cn>80))//同步头本应是7个周期，但收到的结果为6~8个周期内都认可
+ 0D44 20900000          lds R2,_T2cn
+ 0D48 30900100          lds R3,_T2cn+1
+ 0D4C C101              movw R24,R2
+ 0D4E 8C33              cpi R24,60
+ 0D50 E0E0              ldi R30,0
+ 0D52 9E07              cpc R25,R30
+ 0D54 28F0              brlo L143
+ 0D56           X71:
+ 0D56 80E5              ldi R24,80
+ 0D58 90E0              ldi R25,0
+ 0D5A 8215              cp R24,R2
+ 0D5C 9305              cpc R25,R3
+ 0D5E 08F4              brsh L141
+ 0D60           X72:
+ 0D60           L143:
+ 0D60                   .dbline 712
+ 0D60           ;       {
+ 0D60                   .dbline 713
+ 0D60           ;        goto End;//没有收到正确的同步头，直接跳出
+ 0D60 56C1              xjmp L114
+ 0D62           L141:
+ 0D62           L144:
+ 0D62                   .dbline 717
+ 0D62           ;       }
+ 0D62           ;       
+ 0D62           ; Start:        //同步头解码正确，下面开始接收9位数据位 //按位从高到低接收数据位，8位数据加1位校验共9位                         
+ 0D62           ;   for(Int_count=9;Int_count>0;Int_count--)
+ 0D62 89E0              ldi R24,9
+ 0D64 80931601          sts _Int_count,R24
+ 0D68 B3C0              xjmp L148
+ 0D6A           L149:
+ 0D6A                   .dbline 720
+ 0D6A           ;   {   
+ 0D6A           ;    while(1)
+ 0D6A           ;    {
+ 0D6A                   .dbline 721
+ 0D6A           ;      T2cn=TCNT2;
+ 0D6A 24B4              in R2,0x24
+ 0D6C 3324              clr R3
+ 0D6E 30920100          sts _T2cn+1,R3
+ 0D72 20920000          sts _T2cn,R2
+ 0D76                   .dbline 722
+ 0D76           ;         if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+ 0D76 80E5              ldi R24,80
+ 0D78 90E0              ldi R25,0
+ 0D7A 8215              cp R24,R2
+ 0D7C 9305              cpc R25,R3
+ 0D7E 08F4              brsh L152
+ 0D80           X73:
+ 0D80                   .dbline 723
+ 0D80           ;         {
+ 0D80                   .dbline 724
+ 0D80           ;           goto End;
+ 0D80 46C1              xjmp L114
+ 0D82           L152:
+ 0D82                   .dbline 726
+ 0D82           ;         }
+ 0D82           ;      if((PIND&0x08)==0x00)
+ 0D82 8399              sbic 0x10,3
+ 0D84 1BC0              rjmp L154
+ 0D86           X74:
+ 0D86                   .dbline 727
+ 0D86           ;        {
+ 0D86                   .dbline 728
+ 0D86           ;          DELAY20
+ 0D86 2224              clr R2
+ 0D88 3324              clr R3
+ 0D8A 30921401          sts _Tt+1,R3
+ 0D8E 20921301          sts _Tt,R2
+ 0D92 09C0              xjmp L159
+ 0D94           L156:
+ 0D94                   .dbline 728
+ 0D94           L157:
+ 0D94                   .dbline 728
+ 0D94 80911301          lds R24,_Tt
+ 0D98 90911401          lds R25,_Tt+1
+ 0D9C 0196              adiw R24,1
+ 0D9E 90931401          sts _Tt+1,R25
+ 0DA2 80931301          sts _Tt,R24
+ 0DA6           L159:
+ 0DA6                   .dbline 728
+ 0DA6 80911301          lds R24,_Tt
+ 0DAA 90911401          lds R25,_Tt+1
+ 0DAE 8830              cpi R24,8
+ 0DB0 E0E0              ldi R30,0
+ 0DB2 9E07              cpc R25,R30
+ 0DB4 78F3              brlo L156
+ 0DB6           X75:
+ 0DB6                   .dbline 729
+ 0DB6           ;          if((PIND&0x08)==0x00)
+ 0DB6 8399              sbic 0x10,3
+ 0DB8 01C0              rjmp L160
+ 0DBA           X76:
+ 0DBA                   .dbline 730
+ 0DBA           ;           {
+ 0DBA                   .dbline 731
+ 0DBA           ;             break;
+ 0DBA 31C0              xjmp L163
+ 0DBC           L160:
+ 0DBC                   .dbline 733
+ 0DBC           ;           }
+ 0DBC           ;        }
+ 0DBC           L154:
+ 0DBC                   .dbline 734
+ 0DBC           ;    } 
+ 0DBC           L150:
+ 0DBC                   .dbline 719
+ 0DBC D6CF              xjmp L149
+ 0DBE           L162:
+ 0DBE                   .dbline 736
+ 0DBE           ;    while(1)//还没有上升沿到来,死等
+ 0DBE           ;       {
+ 0DBE                   .dbline 737
+ 0DBE           ;         T2cn=TCNT2;
+ 0DBE 24B4              in R2,0x24
+ 0DC0 3324              clr R3
+ 0DC2 30920100          sts _T2cn+1,R3
+ 0DC6 20920000          sts _T2cn,R2
+ 0DCA                   .dbline 738
+ 0DCA           ;         if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+ 0DCA 80E5              ldi R24,80
+ 0DCC 90E0              ldi R25,0
+ 0DCE 8215              cp R24,R2
+ 0DD0 9305              cpc R25,R3
+ 0DD2 08F4              brsh L165
+ 0DD4           X77:
+ 0DD4                   .dbline 739
+ 0DD4           ;         {
+ 0DD4                   .dbline 740
+ 0DD4           ;           goto End;
+ 0DD4 1CC1              xjmp L114
+ 0DD6           L165:
+ 0DD6                   .dbline 742
+ 0DD6           ;         }
+ 0DD6           ;         if((EIFR&0x08)==0x08)
+ 0DD6 88B7              in R24,0x38
+ 0DD8 8870              andi R24,8
+ 0DDA 8830              cpi R24,8
+ 0DDC 01F5              brne L167
+ 0DDE           X78:
+ 0DDE                   .dbline 743
+ 0DDE           ;         {
+ 0DDE                   .dbline 744
+ 0DDE           ;          DELAY10
+ 0DDE 2224              clr R2
+ 0DE0 3324              clr R3
+ 0DE2 30921401          sts _Tt+1,R3
+ 0DE6 20921301          sts _Tt,R2
+ 0DEA 09C0              xjmp L172
+ 0DEC           L169:
+ 0DEC                   .dbline 744
+ 0DEC           L170:
+ 0DEC                   .dbline 744
+ 0DEC 80911301          lds R24,_Tt
+ 0DF0 90911401          lds R25,_Tt+1
+ 0DF4 0196              adiw R24,1
+ 0DF6 90931401          sts _Tt+1,R25
+ 0DFA 80931301          sts _Tt,R24
+ 0DFE           L172:
+ 0DFE                   .dbline 744
+ 0DFE 80911301          lds R24,_Tt
+ 0E02 90911401          lds R25,_Tt+1
+ 0E06 8430              cpi R24,4
+ 0E08 E0E0              ldi R30,0
+ 0E0A 9E07              cpc R25,R30
+ 0E0C 78F3              brlo L169
+ 0E0E           X79:
+ 0E0E                   .dbline 745
+ 0E0E           ;          EIFR|=0x08;//清INT3中断标志 
+ 0E0E 88B7              in R24,0x38
+ 0E10 8860              ori R24,8
+ 0E12 88BF              out 0x38,R24
+ 0E14                   .dbline 746
+ 0E14           ;          if((PIND&0x08)==0x08)//高脉冲维持了10us，则认为是下一个有效上升沿到来
+ 0E14 80B3              in R24,0x10
+ 0E16 8870              andi R24,8
+ 0E18 8830              cpi R24,8
+ 0E1A 09F4              brne L173
+ 0E1C           X80:
+ 0E1C                   .dbline 747
+ 0E1C           ;            {
+ 0E1C                   .dbline 748
+ 0E1C           ;            break;
+ 0E1C 01C0              xjmp L164
+ 0E1E           L173:
+ 0E1E                   .dbline 750
+ 0E1E           ;                }
+ 0E1E           ;         }  
+ 0E1E           L167:
+ 0E1E                   .dbline 751
+ 0E1E           ;       }
+ 0E1E           L163:
+ 0E1E                   .dbline 735
+ 0E1E CFCF              xjmp L162
+ 0E20           L164:
+ 0E20                   .dbline 752
+ 0E20           ;       T2cn=TCNT2;
+ 0E20 24B4              in R2,0x24
+ 0E22 3324              clr R3
+ 0E24 30920100          sts _T2cn+1,R3
+ 0E28 20920000          sts _T2cn,R2
+ 0E2C                   .dbline 753
+ 0E2C           ;       TCNT2=0;
+ 0E2C 2224              clr R2
+ 0E2E 24BC              out 0x24,R2
+ 0E30                   .dbline 754
+ 0E30           ;       if(T2cn<20)//数据位最小是3位，可放宽到2位
+ 0E30 80910000          lds R24,_T2cn
+ 0E34 90910100          lds R25,_T2cn+1
+ 0E38 8431              cpi R24,20
+ 0E3A E0E0              ldi R30,0
+ 0E3C 9E07              cpc R25,R30
+ 0E3E 20F4              brsh L175
+ 0E40           X81:
+ 0E40                   .dbline 755
+ 0E40           ;       {
+ 0E40                   .dbline 756
+ 0E40           ;        IntFlag=3;//接收数据位不完整
+ 0E40 83E0              ldi R24,3
+ 0E42 80931501          sts _IntFlag,R24
+ 0E46                   .dbline 757
+ 0E46           ;        goto End;//数据位来得太早，退出
+ 0E46 E3C0              xjmp L114
+ 0E48           L175:
+ 0E48                   .dbline 759
+ 0E48           ;       }
+ 0E48           ;       else if((T2cn>=20)&&(T2cn<40))//数据位1本应是3个周期，在此我们认为2~4个周期都是可以的
+ 0E48 20900000          lds R2,_T2cn
+ 0E4C 30900100          lds R3,_T2cn+1
+ 0E50 C101              movw R24,R2
+ 0E52 8431              cpi R24,20
+ 0E54 E0E0              ldi R30,0
+ 0E56 9E07              cpc R25,R30
+ 0E58 70F0              brlo L177
+ 0E5A           X82:
+ 0E5A 8832              cpi R24,40
+ 0E5C E0E0              ldi R30,0
+ 0E5E 9E07              cpc R25,R30
+ 0E60 50F4              brsh L177
+ 0E62           X83:
+ 0E62                   .dbline 760
+ 0E62           ;       {
+ 0E62                   .dbline 761
+ 0E62           ;        Rx[Int_count]=1;
+ 0E62 80E0              ldi R24,<_Rx
+ 0E64 90E0              ldi R25,>_Rx
+ 0E66 E0911601          lds R30,_Int_count
+ 0E6A FF27              clr R31
+ 0E6C E80F              add R30,R24
+ 0E6E F91F              adc R31,R25
+ 0E70 81E0              ldi R24,1
+ 0E72 8083              std z+0,R24
+ 0E74                   .dbline 762
+ 0E74           ;       }
+ 0E74 28C0              xjmp L178
+ 0E76           L177:
+ 0E76                   .dbline 763
+ 0E76           ;       else if((T2cn>=40)&&(T2cn<60))//数据位0本应是5个周期，在此我们认为4~6个周期都是可以的
+ 0E76 00910000          lds R16,_T2cn
+ 0E7A 10910100          lds R17,_T2cn+1
+ 0E7E 0832              cpi R16,40
+ 0E80 E0E0              ldi R30,0
+ 0E82 1E07              cpc R17,R30
+ 0E84 70F0              brlo L179
+ 0E86           X84:
+ 0E86 0C33              cpi R16,60
+ 0E88 E0E0              ldi R30,0
+ 0E8A 1E07              cpc R17,R30
+ 0E8C 50F4              brsh L179
+ 0E8E           X85:
+ 0E8E                   .dbline 764
+ 0E8E           ;       {
+ 0E8E                   .dbline 765
+ 0E8E           ;        Rx[Int_count]=0;
+ 0E8E 80E0              ldi R24,<_Rx
+ 0E90 90E0              ldi R25,>_Rx
+ 0E92 E0911601          lds R30,_Int_count
+ 0E96 FF27              clr R31
+ 0E98 E80F              add R30,R24
+ 0E9A F91F              adc R31,R25
+ 0E9C 2224              clr R2
+ 0E9E 2082              std z+0,R2
+ 0EA0                   .dbline 766
+ 0EA0           ;       }
+ 0EA0 12C0              xjmp L180
+ 0EA2           L179:
+ 0EA2                   .dbline 767
+ 0EA2           ;       else if((T2cn>=60)&&(T2cn<=80))//同步位本应是7周期，在此我们认为6~8周期都是可以的
+ 0EA2 00910000          lds R16,_T2cn
+ 0EA6 10910100          lds R17,_T2cn+1
+ 0EAA 0C33              cpi R16,60
+ 0EAC E0E0              ldi R30,0
+ 0EAE 1E07              cpc R17,R30
+ 0EB0 30F0              brlo L181
+ 0EB2           X86:
+ 0EB2 80E5              ldi R24,80
+ 0EB4 90E0              ldi R25,0
+ 0EB6 8017              cp R24,R16
+ 0EB8 9107              cpc R25,R17
+ 0EBA 08F0              brlo L181
+ 0EBC           X87:
+ 0EBC                   .dbline 768
+ 0EBC           ;       {
+ 0EBC                   .dbline 769
+ 0EBC           ;        goto Start;//在接收数据位时收到了同步位，跳到数据位解码起始位处
+ 0EBC 52CF              xjmp L144
+ 0EBE           L181:
+ 0EBE                   .dbline 772
+ 0EBE           ;       }
+ 0EBE           ;       else 
+ 0EBE           ;       {
+ 0EBE                   .dbline 773
+ 0EBE           ;        IntFlag=3;//接收数据位不完整
+ 0EBE 83E0              ldi R24,3
+ 0EC0 80931501          sts _IntFlag,R24
+ 0EC4                   .dbline 774
+ 0EC4           ;        goto End;//数据位来得太迟，退出
+ 0EC4 A4C0              xjmp L114
+ 0EC6           L180:
+ 0EC6           L178:
+ 0EC6                   .dbline 776
+ 0EC6           ;       }
+ 0EC6           ;   }   
+ 0EC6           L146:
+ 0EC6                   .dbline 717
+ 0EC6 80911601          lds R24,_Int_count
+ 0ECA 8150              subi R24,1
+ 0ECC 80931601          sts _Int_count,R24
+ 0ED0           L148:
+ 0ED0                   .dbline 717
+ 0ED0 80E0              ldi R24,0
+ 0ED2 20901601          lds R2,_Int_count
+ 0ED6 8215              cp R24,R2
+ 0ED8 08F4              brsh X99
+ 0EDA 70CF              xjmp L150
+ 0EDC           X99:
+ 0EDC           X88:
+ 0EDC                   .dbline 778
+ 0EDC           ;       
+ 0EDC           ;     R_dat=0;
+ 0EDC 2224              clr R2
+ 0EDE 3324              clr R3
+ 0EE0 30922F01          sts _R_dat+1,R3
+ 0EE4 20922E01          sts _R_dat,R2
+ 0EE8                   .dbline 779
+ 0EE8           ;     if(Rx[2])
+ 0EE8 20903401          lds R2,_Rx+2
+ 0EEC 2220              tst R2
+ 0EEE 49F0              breq L183
+ 0EF0           X89:
+ 0EF0                   .dbline 780
+ 0EF0           ;           R_dat|=0x01;
+ 0EF0 80912E01          lds R24,_R_dat
+ 0EF4 90912F01          lds R25,_R_dat+1
+ 0EF8 8160              ori R24,1
+ 0EFA 90932F01          sts _R_dat+1,R25
+ 0EFE 80932E01          sts _R_dat,R24
+ 0F02           L183:
+ 0F02                   .dbline 781
+ 0F02           ;     if(Rx[3])
+ 0F02 20903501          lds R2,_Rx+3
+ 0F06 2220              tst R2
+ 0F08 49F0              breq L186
+ 0F0A           X90:
+ 0F0A                   .dbline 782
+ 0F0A           ;           R_dat|=0x02;
+ 0F0A 80912E01          lds R24,_R_dat
+ 0F0E 90912F01          lds R25,_R_dat+1
+ 0F12 8260              ori R24,2
+ 0F14 90932F01          sts _R_dat+1,R25
+ 0F18 80932E01          sts _R_dat,R24
+ 0F1C           L186:
+ 0F1C                   .dbline 783
+ 0F1C           ;     if(Rx[4])
+ 0F1C 20903601          lds R2,_Rx+4
+ 0F20 2220              tst R2
+ 0F22 49F0              breq L189
+ 0F24           X91:
+ 0F24                   .dbline 784
+ 0F24           ;           R_dat|=0x04;
+ 0F24 80912E01          lds R24,_R_dat
+ 0F28 90912F01          lds R25,_R_dat+1
+ 0F2C 8460              ori R24,4
+ 0F2E 90932F01          sts _R_dat+1,R25
+ 0F32 80932E01          sts _R_dat,R24
+ 0F36           L189:
+ 0F36                   .dbline 785
+ 0F36           ;     if(Rx[5])
+ 0F36 20903701          lds R2,_Rx+5
+ 0F3A 2220              tst R2
+ 0F3C 49F0              breq L192
+ 0F3E           X92:
+ 0F3E                   .dbline 786
+ 0F3E           ;           R_dat|=0x08;
+ 0F3E 80912E01          lds R24,_R_dat
+ 0F42 90912F01          lds R25,_R_dat+1
+ 0F46 8860              ori R24,8
+ 0F48 90932F01          sts _R_dat+1,R25
+ 0F4C 80932E01          sts _R_dat,R24
+ 0F50           L192:
+ 0F50                   .dbline 787
+ 0F50           ;     if(Rx[6])
+ 0F50 20903801          lds R2,_Rx+6
+ 0F54 2220              tst R2
+ 0F56 49F0              breq L195
+ 0F58           X93:
+ 0F58                   .dbline 788
+ 0F58           ;           R_dat|=0x10;
+ 0F58 80912E01          lds R24,_R_dat
+ 0F5C 90912F01          lds R25,_R_dat+1
+ 0F60 8061              ori R24,16
+ 0F62 90932F01          sts _R_dat+1,R25
+ 0F66 80932E01          sts _R_dat,R24
+ 0F6A           L195:
+ 0F6A                   .dbline 789
+ 0F6A           ;     if(Rx[7])
+ 0F6A 20903901          lds R2,_Rx+7
+ 0F6E 2220              tst R2
+ 0F70 49F0              breq L198
+ 0F72           X94:
+ 0F72                   .dbline 790
+ 0F72           ;           R_dat|=0x20;
+ 0F72 80912E01          lds R24,_R_dat
+ 0F76 90912F01          lds R25,_R_dat+1
+ 0F7A 8062              ori R24,32
+ 0F7C 90932F01          sts _R_dat+1,R25
+ 0F80 80932E01          sts _R_dat,R24
+ 0F84           L198:
+ 0F84                   .dbline 791
+ 0F84           ;     if(Rx[8])
+ 0F84 20903A01          lds R2,_Rx+8
+ 0F88 2220              tst R2
+ 0F8A 49F0              breq L201
+ 0F8C           X95:
+ 0F8C                   .dbline 792
+ 0F8C           ;           R_dat|=0x40;
+ 0F8C 80912E01          lds R24,_R_dat
+ 0F90 90912F01          lds R25,_R_dat+1
+ 0F94 8064              ori R24,64
+ 0F96 90932F01          sts _R_dat+1,R25
+ 0F9A 80932E01          sts _R_dat,R24
+ 0F9E           L201:
+ 0F9E                   .dbline 793
+ 0F9E           ;     if(Rx[9])
+ 0F9E 20903B01          lds R2,_Rx+9
+ 0FA2 2220              tst R2
+ 0FA4 49F0              breq L204
+ 0FA6           X96:
+ 0FA6                   .dbline 794
+ 0FA6           ;           R_dat|=0x80;
+ 0FA6 80912E01          lds R24,_R_dat
+ 0FAA 90912F01          lds R25,_R_dat+1
+ 0FAE 8068              ori R24,128
+ 0FB0 90932F01          sts _R_dat+1,R25
+ 0FB4 80932E01          sts _R_dat,R24
+ 0FB8           L204:
+ 0FB8                   .dbline 796
+ 0FB8           ;       
+ 0FB8           ;       Rx[0]=1;  
+ 0FB8 81E0              ldi R24,1
+ 0FBA 80933201          sts _Rx,R24
+ 0FBE                   .dbline 797
+ 0FBE           ;       for(Int_count=2;Int_count<10;Int_count++)  
+ 0FBE 82E0              ldi R24,2
+ 0FC0 80931601          sts _Int_count,R24
+ 0FC4 12C0              xjmp L210
+ 0FC6           L207:
+ 0FC6                   .dbline 798
+ 0FC6           ;        Rx[0]^=Rx[Int_count];  
+ 0FC6 80E0              ldi R24,<_Rx
+ 0FC8 90E0              ldi R25,>_Rx
+ 0FCA E0911601          lds R30,_Int_count
+ 0FCE FF27              clr R31
+ 0FD0 E80F              add R30,R24
+ 0FD2 F91F              adc R31,R25
+ 0FD4 2080              ldd R2,z+0
+ 0FD6 30903201          lds R3,_Rx
+ 0FDA 3224              eor R3,R2
+ 0FDC 30923201          sts _Rx,R3
+ 0FE0           L208:
+ 0FE0                   .dbline 797
+ 0FE0 80911601          lds R24,_Int_count
+ 0FE4 8F5F              subi R24,255    ; addi 1
+ 0FE6 80931601          sts _Int_count,R24
+ 0FEA           L210:
+ 0FEA                   .dbline 797
+ 0FEA 80911601          lds R24,_Int_count
+ 0FEE 8A30              cpi R24,10
+ 0FF0 50F3              brlo L207
+ 0FF2           X97:
+ 0FF2                   .dbline 800
+ 0FF2           ;          
+ 0FF2           ;       if(Rx[0]==Rx[1])
+ 0FF2 20903301          lds R2,_Rx+1
+ 0FF6 30903201          lds R3,_Rx
+ 0FFA 3214              cp R3,R2
+ 0FFC 21F4              brne L211
+ 0FFE           X98:
+ 0FFE                   .dbline 801
+ 0FFE           ;        {
+ 0FFE                   .dbline 802
+ 0FFE           ;                IntFlag=1;//接收帧正常 
+ 0FFE 81E0              ldi R24,1
+ 1000 80931501          sts _IntFlag,R24
+ 1004                   .dbline 803
+ 1004           ;        }
+ 1004 0FC0              xjmp L214
+ 1006           L211:
+ 1006                   .dbline 805
+ 1006           ;       else           
+ 1006           ;        {
+ 1006                   .dbline 806
+ 1006           ;                IntFlag=2;//接收帧校验错
+ 1006 82E0              ldi R24,2
+ 1008 80931501          sts _IntFlag,R24
+ 100C                   .dbline 807
+ 100C           ;        }
+ 100C                   .dbline 809
+ 100C           ;          
+ 100C           ;    goto End1;//只要接收到正常的同步头，不管校验位是对是错，都暂时不开放INT0中断
+ 100C 0BC0              xjmp L214
+ 100E           L114:
+ 100E                   .dbline 812
+ 100E           ;      
+ 100E           ; End:
+ 100E           ;  EIFR|=0x08;//清INT3中断标志 
+ 100E 88B7              in R24,0x38
+ 1010 8860              ori R24,8
+ 1012 88BF              out 0x38,R24
+ 1014                   .dbline 813
+ 1014           ;  EICRA|=0xc0; //INT3上升沿触发 
+ 1014 80916A00          lds R24,106
+ 1018 806C              ori R24,192
+ 101A 80936A00          sts 106,R24
+ 101E                   .dbline 814
+ 101E           ;  EIMSK|=0x08;//使能INT3中断 
+ 101E 89B7              in R24,0x39
+ 1020 8860              ori R24,8
+ 1022 89BF              out 0x39,R24
+ 1024           L214:
+ 1024                   .dbline 816
+ 1024           ; End1:
+ 1024           ;    TCCR2 = 0x00; //stop
+ 1024 2224              clr R2
+ 1026 25BC              out 0x25,R2
+ 1028                   .dbline 817
+ 1028           ;    SREG|=0x80;//总中断使能;  
+ 1028 7894              bset 7
+ 102A                   .dbline -2
+ 102A           L107:
+ 102A                   .dbline 0 ; func end
+ 102A 2990              ld R2,y+
+ 102C 2FBE              OUT 63,R2
+ 102E F991              ld R31,y+
+ 1030 E991              ld R30,y+
+ 1032 A991              ld R26,y+
+ 1034 9991              ld R25,y+
+ 1036 8991              ld R24,y+
+ 1038 1991              ld R17,y+
+ 103A 0991              ld R16,y+
+ 103C 3990              ld R3,y+
+ 103E 2990              ld R2,y+
+ 1040 1895              reti
+ 1042                   .dbend
+                        .area vector(rom, abs)
+                        .org 92
+ 005C 0C942108          jmp _E_comp
+                        .area text(rom, con, rel)
+ 1042                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 1042                   .dbfunc e E_comp _E_comp fV
+                        .even
+ 1042           _E_comp::
+ 1042 1A92              st -y,R1
+ 1044 2A92              st -y,R2
+ 1046 8A93              st -y,R24
+ 1048 9A93              st -y,R25
+ 104A 1FB6              IN R1,63
+ 104C 1A92              st -y,R1
+ 104E                   .dbline -1
+ 104E                   .dbline 823
+ 104E           ; }
+ 104E           ; 
+ 104E           ; 
+ 104E           ; #pragma interrupt_handler E_comp:24
+ 104E           ; void E_comp(void)  //模拟比较器中断,总线电压被拉低到28.5V后，立即停电机
+ 104E           ; { 
+ 104E                   .dbline 824
+ 104E           ;    if(PWM1_PIN==1)//收放电机欠压堵转
+ 104E 89B3              in R24,0x19
+ 1050 8270              andi R24,2
+ 1052 8695              lsr R24
+ 1054 8130              cpi R24,1
+ 1056 49F4              brne L216
+ 1058           X100:
+ 1058                   .dbline 825
+ 1058           ;    {
+ 1058                   .dbline 826
+ 1058           ;        Motor1Status.s.UnderVoltage=1;
+ 1058 80914601          lds R24,_Motor1Status
+ 105C 90914701          lds R25,_Motor1Status+1
+ 1060 8062              ori R24,32
+ 1062 90934701          sts _Motor1Status+1,R25
+ 1066 80934601          sts _Motor1Status,R24
+ 106A                   .dbline 827
+ 106A           ;    }
+ 106A           L216:
+ 106A                   .dbline 828
+ 106A           ;   if(PWM2_PIN==1)//调节电机欠压堵转
+ 106A 80B1              in R24,0x0
+ 106C 8470              andi R24,4
+ 106E 8695              lsr R24
+ 1070 8695              lsr R24
+ 1072 8130              cpi R24,1
+ 1074 49F4              brne L218
+ 1076           X101:
+ 1076                   .dbline 829
+ 1076           ;    { 
+ 1076                   .dbline 830
+ 1076           ;       Motor2Status.s.UnderVoltage=1;
+ 1076 80914401          lds R24,_Motor2Status
+ 107A 90914501          lds R25,_Motor2Status+1
+ 107E 8062              ori R24,32
+ 1080 90934501          sts _Motor2Status+1,R25
+ 1084 80934401          sts _Motor2Status,R24
+ 1088                   .dbline 831
+ 1088           ;    } 
+ 1088           L218:
+ 1088                   .dbline 832
+ 1088           ;    MOTORSTOP  //关电机 
+ 1088                   .dbline 832
+ 1088 8AB3              in R24,0x1a
+ 108A 8760              ori R24,7
+ 108C 8ABB              out 0x1a,R24
+ 108E                   .dbline 832
+ 108E 8BB3              in R24,0x1b
+ 1090 8D7F              andi R24,253
+ 1092 8BBB              out 0x1b,R24
+ 1094                   .dbline 832
+ 1094 8BB3              in R24,0x1b
+ 1096 887F              andi R24,248
+ 1098 8BBB              out 0x1b,R24
+ 109A                   .dbline 832
+ 109A 80916100          lds R24,97
+ 109E 8760              ori R24,7
+ 10A0 80936100          sts 97,R24
+ 10A4                   .dbline 832
+ 10A4 80916200          lds R24,98
+ 10A8 8B7F              andi R24,251
+ 10AA 80936200          sts 98,R24
+ 10AE                   .dbline 832
+ 10AE 80916200          lds R24,98
+ 10B2 887F              andi R24,248
+ 10B4 80936200          sts 98,R24
+ 10B8                   .dbline 832
+ 10B8 BF9A              sbi 0x17,7
+ 10BA                   .dbline 832
+ 10BA 88B3              in R24,0x18
+ 10BC 8F77              andi R24,127
+ 10BE 88BB              out 0x18,R24
+ 10C0                   .dbline 832
+ 10C0                   .dbline -2
+ 10C0           L215:
+ 10C0                   .dbline 0 ; func end
+ 10C0 1990              ld R1,y+
+ 10C2 1FBE              OUT 63,R1
+ 10C4 9991              ld R25,y+
+ 10C6 8991              ld R24,y+
+ 10C8 2990              ld R2,y+
+ 10CA 1990              ld R1,y+
+ 10CC 1895              reti
+ 10CE                   .dbend
+ 10CE                   .dbfunc e SendManchester _SendManchester fV
+ 10CE           ;              L -> R20
+                        .even
+ 10CE           _SendManchester::
+ 10CE 4A93              st -y,R20
+ 10D0                   .dbline -1
+ 10D0                   .dbline 837
+ 10D0           ;  
+ 10D0           ; }
+ 10D0           ; 
+ 10D0           ; void SendManchester(void) //曼码发送程序,总耗时最大约120+560+8400+720=9800us，最小约120+560+5040+720=6440us
+ 10D0           ; { //每位80us
+ 10D0                   .dbline 842
+ 10D0           ;  //同步：1高6低
+ 10D0           ;  //1:    1高2低
+ 10D0           ;  //0：   1高4低  
+ 10D0           ;   unsigned char L;
+ 10D0           ;   SREG&=0x7f;//关总中断 
+ 10D0 8FB7              in R24,0x3f
+ 10D2 8F77              andi R24,127
+ 10D4 8FBF              out 0x3f,R24
+ 10D6                   .dbline 844
+ 10D6           ;   
+ 10D6           ;     M1_H //先给总线放电，耗时约120us
+ 10D6 929A              sbi 0x12,2
+ 10D8                   .dbline 848
+ 10D8           ;       
+ 10D8           ;   //模拟同步头数据
+ 10D8           ;       //4位命令
+ 10D8           ;       T_dat_buf[21]=(T_com&0x08)>>3;
+ 10D8 80912D01          lds R24,_T_com
+ 10DC 8870              andi R24,8
+ 10DE 8695              lsr R24
+ 10E0 8695              lsr R24
+ 10E2 8695              lsr R24
+ 10E4 80932C01          sts _T_dat_buf+21,R24
+ 10E8                   .dbline 849
+ 10E8           ;       T_dat_buf[20]=(T_com&0x04)>>2;
+ 10E8 80912D01          lds R24,_T_com
+ 10EC 8470              andi R24,4
+ 10EE 8695              lsr R24
+ 10F0 8695              lsr R24
+ 10F2 80932B01          sts _T_dat_buf+20,R24
+ 10F6                   .dbline 850
+ 10F6           ;       T_dat_buf[19]=(T_com&0x02)>>1;
+ 10F6 80912D01          lds R24,_T_com
+ 10FA 8270              andi R24,2
+ 10FC 8695              lsr R24
+ 10FE 80932A01          sts _T_dat_buf+19,R24
+ 1102                   .dbline 851
+ 1102           ;       T_dat_buf[18]=T_com&0x01;
+ 1102 80912D01          lds R24,_T_com
+ 1106 8170              andi R24,1
+ 1108 80932901          sts _T_dat_buf+18,R24
+ 110C                   .dbline 853
+ 110C           ;       //16位数据
+ 110C           ;       T_dat_buf[17]=(T_dat&0x8000)>>15;
+ 110C 2FE0              ldi R18,15
+ 110E 30E0              ldi R19,0
+ 1110 00913001          lds R16,_T_dat
+ 1114 10913101          lds R17,_T_dat+1
+ 1118 0070              andi R16,0
+ 111A 1078              andi R17,128
+ 111C 0E940000          xcall lsr16
+ 1120 00932801          sts _T_dat_buf+17,R16
+ 1124                   .dbline 854
+ 1124           ;       T_dat_buf[16]=(T_dat&0x4000)>>14;
+ 1124 2EE0              ldi R18,14
+ 1126 30E0              ldi R19,0
+ 1128 00913001          lds R16,_T_dat
+ 112C 10913101          lds R17,_T_dat+1
+ 1130 0070              andi R16,0
+ 1132 1074              andi R17,64
+ 1134 0E940000          xcall lsr16
+ 1138 00932701          sts _T_dat_buf+16,R16
+ 113C                   .dbline 855
+ 113C           ;       T_dat_buf[15]=(T_dat&0x2000)>>13;
+ 113C 2DE0              ldi R18,13
+ 113E 30E0              ldi R19,0
+ 1140 00913001          lds R16,_T_dat
+ 1144 10913101          lds R17,_T_dat+1
+ 1148 0070              andi R16,0
+ 114A 1072              andi R17,32
+ 114C 0E940000          xcall lsr16
+ 1150 00932601          sts _T_dat_buf+15,R16
+ 1154                   .dbline 856
+ 1154           ;       T_dat_buf[14]=(T_dat&0x1000)>>12;
+ 1154 2CE0              ldi R18,12
+ 1156 30E0              ldi R19,0
+ 1158 00913001          lds R16,_T_dat
+ 115C 10913101          lds R17,_T_dat+1
+ 1160 0070              andi R16,0
+ 1162 1071              andi R17,16
+ 1164 0E940000          xcall lsr16
+ 1168 00932501          sts _T_dat_buf+14,R16
+ 116C                   .dbline 857
+ 116C           ;       T_dat_buf[13]=(T_dat&0x0800)>>11;
+ 116C 2BE0              ldi R18,11
+ 116E 30E0              ldi R19,0
+ 1170 00913001          lds R16,_T_dat
+ 1174 10913101          lds R17,_T_dat+1
+ 1178 0070              andi R16,0
+ 117A 1870              andi R17,8
+ 117C 0E940000          xcall lsr16
+ 1180 00932401          sts _T_dat_buf+13,R16
+ 1184                   .dbline 858
+ 1184           ;     T_dat_buf[12]=(T_dat&0x0400)>>10;
+ 1184 2AE0              ldi R18,10
+ 1186 30E0              ldi R19,0
+ 1188 00913001          lds R16,_T_dat
+ 118C 10913101          lds R17,_T_dat+1
+ 1190 0070              andi R16,0
+ 1192 1470              andi R17,4
+ 1194 0E940000          xcall lsr16
+ 1198 00932301          sts _T_dat_buf+12,R16
+ 119C                   .dbline 859
+ 119C           ;     T_dat_buf[11]=(T_dat&0x0200)>>9;
+ 119C 29E0              ldi R18,9
+ 119E 30E0              ldi R19,0
+ 11A0 00913001          lds R16,_T_dat
+ 11A4 10913101          lds R17,_T_dat+1
+ 11A8 0070              andi R16,0
+ 11AA 1270              andi R17,2
+ 11AC 0E940000          xcall lsr16
+ 11B0 00932201          sts _T_dat_buf+11,R16
+ 11B4                   .dbline 860
+ 11B4           ;       T_dat_buf[10]=(T_dat&0x0100)>>8;
+ 11B4 80913001          lds R24,_T_dat
+ 11B8 90913101          lds R25,_T_dat+1
+ 11BC 8070              andi R24,0
+ 11BE 9170              andi R25,1
+ 11C0 1C01              movw R2,R24
+ 11C2 232C              mov R2,R3
+ 11C4 3324              clr R3
+ 11C6 20922101          sts _T_dat_buf+10,R2
+ 11CA                   .dbline 861
+ 11CA           ;       T_dat_buf[9]=(T_dat&0x0080)>>7;
+ 11CA 27E0              ldi R18,7
+ 11CC 30E0              ldi R19,0
+ 11CE 00913001          lds R16,_T_dat
+ 11D2 10913101          lds R17,_T_dat+1
+ 11D6 0078              andi R16,128
+ 11D8 1070              andi R17,0
+ 11DA 0E940000          xcall lsr16
+ 11DE 00932001          sts _T_dat_buf+9,R16
+ 11E2                   .dbline 862
+ 11E2           ;       T_dat_buf[8]=(T_dat&0x0040)>>6;
+ 11E2 26E0              ldi R18,6
+ 11E4 30E0              ldi R19,0
+ 11E6 00913001          lds R16,_T_dat
+ 11EA 10913101          lds R17,_T_dat+1
+ 11EE 0074              andi R16,64
+ 11F0 1070              andi R17,0
+ 11F2 0E940000          xcall lsr16
+ 11F6 00931F01          sts _T_dat_buf+8,R16
+ 11FA                   .dbline 863
+ 11FA           ;       T_dat_buf[7]=(T_dat&0x0020)>>5;
+ 11FA 25E0              ldi R18,5
+ 11FC 30E0              ldi R19,0
+ 11FE 00913001          lds R16,_T_dat
+ 1202 10913101          lds R17,_T_dat+1
+ 1206 0072              andi R16,32
+ 1208 1070              andi R17,0
+ 120A 0E940000          xcall lsr16
+ 120E 00931E01          sts _T_dat_buf+7,R16
+ 1212                   .dbline 864
+ 1212           ;       T_dat_buf[6]=(T_dat&0x0010)>>4;
+ 1212 80913001          lds R24,_T_dat
+ 1216 90913101          lds R25,_T_dat+1
+ 121A 8071              andi R24,16
+ 121C 9070              andi R25,0
+ 121E 1C01              movw R2,R24
+ 1220 3694              lsr R3
+ 1222 2794              ror R2
+ 1224 3694              lsr R3
+ 1226 2794              ror R2
+ 1228 3694              lsr R3
+ 122A 2794              ror R2
+ 122C 3694              lsr R3
+ 122E 2794              ror R2
+ 1230 20921D01          sts _T_dat_buf+6,R2
+ 1234                   .dbline 865
+ 1234           ;       T_dat_buf[5]=(T_dat&0x0008)>>3;
+ 1234 80913001          lds R24,_T_dat
+ 1238 90913101          lds R25,_T_dat+1
+ 123C 8870              andi R24,8
+ 123E 9070              andi R25,0
+ 1240 1C01              movw R2,R24
+ 1242 3694              lsr R3
+ 1244 2794              ror R2
+ 1246 3694              lsr R3
+ 1248 2794              ror R2
+ 124A 3694              lsr R3
+ 124C 2794              ror R2
+ 124E 20921C01          sts _T_dat_buf+5,R2
+ 1252                   .dbline 866
+ 1252           ;       T_dat_buf[4]=(T_dat&0x0004)>>2;
+ 1252 80913001          lds R24,_T_dat
+ 1256 90913101          lds R25,_T_dat+1
+ 125A 8470              andi R24,4
+ 125C 9070              andi R25,0
+ 125E 1C01              movw R2,R24
+ 1260 3694              lsr R3
+ 1262 2794              ror R2
+ 1264 3694              lsr R3
+ 1266 2794              ror R2
+ 1268 20921B01          sts _T_dat_buf+4,R2
+ 126C                   .dbline 867
+ 126C           ;       T_dat_buf[3]=(T_dat&0x0002)>>1;
+ 126C 80913001          lds R24,_T_dat
+ 1270 90913101          lds R25,_T_dat+1
+ 1274 8270              andi R24,2
+ 1276 9070              andi R25,0
+ 1278 1C01              movw R2,R24
+ 127A 3694              lsr R3
+ 127C 2794              ror R2
+ 127E 20921A01          sts _T_dat_buf+3,R2
+ 1282                   .dbline 868
+ 1282           ;       T_dat_buf[2]=T_dat&0x0001;
+ 1282 80913001          lds R24,_T_dat
+ 1286 90913101          lds R25,_T_dat+1
+ 128A 8170              andi R24,1
+ 128C 9070              andi R25,0
+ 128E 80931901          sts _T_dat_buf+2,R24
+ 1292                   .dbline 870
+ 1292           ;       //计算校验位，奇校验
+ 1292           ;       T_dat_buf[1]=1;
+ 1292 81E0              ldi R24,1
+ 1294 80931801          sts _T_dat_buf+1,R24
+ 1298                   .dbline 871
+ 1298           ;       for(L=2;L<22;L++)
+ 1298 42E0              ldi R20,2
+ 129A 0DC0              xjmp L245
+ 129C           L242:
+ 129C                   .dbline 872
+ 129C           ;               {T_dat_buf[1]^=T_dat_buf[L];}
+ 129C                   .dbline 872
+ 129C 80E0              ldi R24,<_T_dat_buf
+ 129E 90E0              ldi R25,>_T_dat_buf
+ 12A0 E42F              mov R30,R20
+ 12A2 FF27              clr R31
+ 12A4 E80F              add R30,R24
+ 12A6 F91F              adc R31,R25
+ 12A8 2080              ldd R2,z+0
+ 12AA 30901801          lds R3,_T_dat_buf+1
+ 12AE 3224              eor R3,R2
+ 12B0 30921801          sts _T_dat_buf+1,R3
+ 12B4                   .dbline 872
+ 12B4           L243:
+ 12B4                   .dbline 871
+ 12B4 4395              inc R20
+ 12B6           L245:
+ 12B6                   .dbline 871
+ 12B6 4631              cpi R20,22
+ 12B8 88F3              brlo L242
+ 12BA           X102:
+ 12BA                   .dbline 873
+ 12BA           ;     DELAY80
+ 12BA 2224              clr R2
+ 12BC 3324              clr R3
+ 12BE 30921401          sts _Tt+1,R3
+ 12C2 20921301          sts _Tt,R2
+ 12C6 09C0              xjmp L250
+ 12C8           L247:
+ 12C8                   .dbline 873
+ 12C8           L248:
+ 12C8                   .dbline 873
+ 12C8 80911301          lds R24,_Tt
+ 12CC 90911401          lds R25,_Tt+1
+ 12D0 0196              adiw R24,1
+ 12D2 90931401          sts _Tt+1,R25
+ 12D6 80931301          sts _Tt,R24
+ 12DA           L250:
+ 12DA                   .dbline 873
+ 12DA 80911301          lds R24,_Tt
+ 12DE 90911401          lds R25,_Tt+1
+ 12E2 8032              cpi R24,32
+ 12E4 E0E0              ldi R30,0
+ 12E6 9E07              cpc R25,R30
+ 12E8 78F3              brlo L247
+ 12EA           X103:
+ 12EA                   .dbline 874
+ 12EA           ;     M1_L
+ 12EA 82B3              in R24,0x12
+ 12EC 8B7F              andi R24,251
+ 12EE 82BB              out 0x12,R24
+ 12F0                   .dbline 875
+ 12F0           ;       DELAY40
+ 12F0 2224              clr R2
+ 12F2 3324              clr R3
+ 12F4 30921401          sts _Tt+1,R3
+ 12F8 20921301          sts _Tt,R2
+ 12FC 09C0              xjmp L254
+ 12FE           L251:
+ 12FE                   .dbline 875
+ 12FE           L252:
+ 12FE                   .dbline 875
+ 12FE 80911301          lds R24,_Tt
+ 1302 90911401          lds R25,_Tt+1
+ 1306 0196              adiw R24,1
+ 1308 90931401          sts _Tt+1,R25
+ 130C 80931301          sts _Tt,R24
+ 1310           L254:
+ 1310                   .dbline 875
+ 1310 80911301          lds R24,_Tt
+ 1314 90911401          lds R25,_Tt+1
+ 1318 8031              cpi R24,16
+ 131A E0E0              ldi R30,0
+ 131C 9E07              cpc R25,R30
+ 131E 78F3              brlo L251
+ 1320           X104:
+ 1320                   .dbline 880
+ 1320           ;    
+ 1320           ;    
+ 1320           ;       //同步头,560us
+ 1320           ;       //充电开始，高80us       
+ 1320           ;       M2_H    
+ 1320 919A              sbi 0x12,1
+ 1322                   .dbline 881
+ 1322           ;       DELAY80
+ 1322 2224              clr R2
+ 1324 3324              clr R3
+ 1326 30921401          sts _Tt+1,R3
+ 132A 20921301          sts _Tt,R2
+ 132E 09C0              xjmp L258
+ 1330           L255:
+ 1330                   .dbline 881
+ 1330           L256:
+ 1330                   .dbline 881
+ 1330 80911301          lds R24,_Tt
+ 1334 90911401          lds R25,_Tt+1
+ 1338 0196              adiw R24,1
+ 133A 90931401          sts _Tt+1,R25
+ 133E 80931301          sts _Tt,R24
+ 1342           L258:
+ 1342                   .dbline 881
+ 1342 80911301          lds R24,_Tt
+ 1346 90911401          lds R25,_Tt+1
+ 134A 8032              cpi R24,32
+ 134C E0E0              ldi R30,0
+ 134E 9E07              cpc R25,R30
+ 1350 78F3              brlo L255
+ 1352           X105:
+ 1352                   .dbline 882
+ 1352           ;       M2_L   //充电结束       
+ 1352 82B3              in R24,0x12
+ 1354 8D7F              andi R24,253
+ 1356 82BB              out 0x12,R24
+ 1358                   .dbline 884
+ 1358           ;       //放电开始，低80*6=480us
+ 1358           ;       DELAY40
+ 1358 2224              clr R2
+ 135A 3324              clr R3
+ 135C 30921401          sts _Tt+1,R3
+ 1360 20921301          sts _Tt,R2
+ 1364 09C0              xjmp L262
+ 1366           L259:
+ 1366                   .dbline 884
+ 1366           L260:
+ 1366                   .dbline 884
+ 1366 80911301          lds R24,_Tt
+ 136A 90911401          lds R25,_Tt+1
+ 136E 0196              adiw R24,1
+ 1370 90931401          sts _Tt+1,R25
+ 1374 80931301          sts _Tt,R24
+ 1378           L262:
+ 1378                   .dbline 884
+ 1378 80911301          lds R24,_Tt
+ 137C 90911401          lds R25,_Tt+1
+ 1380 8031              cpi R24,16
+ 1382 E0E0              ldi R30,0
+ 1384 9E07              cpc R25,R30
+ 1386 78F3              brlo L259
+ 1388           X106:
+ 1388                   .dbline 885
+ 1388           ;       M1_H    
+ 1388 929A              sbi 0x12,2
+ 138A                   .dbline 886
+ 138A           ;     DELAY80
+ 138A 2224              clr R2
+ 138C 3324              clr R3
+ 138E 30921401          sts _Tt+1,R3
+ 1392 20921301          sts _Tt,R2
+ 1396 09C0              xjmp L266
+ 1398           L263:
+ 1398                   .dbline 886
+ 1398           L264:
+ 1398                   .dbline 886
+ 1398 80911301          lds R24,_Tt
+ 139C 90911401          lds R25,_Tt+1
+ 13A0 0196              adiw R24,1
+ 13A2 90931401          sts _Tt+1,R25
+ 13A6 80931301          sts _Tt,R24
+ 13AA           L266:
+ 13AA                   .dbline 886
+ 13AA 80911301          lds R24,_Tt
+ 13AE 90911401          lds R25,_Tt+1
+ 13B2 8032              cpi R24,32
+ 13B4 E0E0              ldi R30,0
+ 13B6 9E07              cpc R25,R30
+ 13B8 78F3              brlo L263
+ 13BA           X107:
+ 13BA                   .dbline 887
+ 13BA           ;       DELAY80
+ 13BA 2224              clr R2
+ 13BC 3324              clr R3
+ 13BE 30921401          sts _Tt+1,R3
+ 13C2 20921301          sts _Tt,R2
+ 13C6 09C0              xjmp L270
+ 13C8           L267:
+ 13C8                   .dbline 887
+ 13C8           L268:
+ 13C8                   .dbline 887
+ 13C8 80911301          lds R24,_Tt
+ 13CC 90911401          lds R25,_Tt+1
+ 13D0 0196              adiw R24,1
+ 13D2 90931401          sts _Tt+1,R25
+ 13D6 80931301          sts _Tt,R24
+ 13DA           L270:
+ 13DA                   .dbline 887
+ 13DA 80911301          lds R24,_Tt
+ 13DE 90911401          lds R25,_Tt+1
+ 13E2 8032              cpi R24,32
+ 13E4 E0E0              ldi R30,0
+ 13E6 9E07              cpc R25,R30
+ 13E8 78F3              brlo L267
+ 13EA           X108:
+ 13EA                   .dbline 888
+ 13EA           ;       DELAY80
+ 13EA 2224              clr R2
+ 13EC 3324              clr R3
+ 13EE 30921401          sts _Tt+1,R3
+ 13F2 20921301          sts _Tt,R2
+ 13F6 09C0              xjmp L274
+ 13F8           L271:
+ 13F8                   .dbline 888
+ 13F8           L272:
+ 13F8                   .dbline 888
+ 13F8 80911301          lds R24,_Tt
+ 13FC 90911401          lds R25,_Tt+1
+ 1400 0196              adiw R24,1
+ 1402 90931401          sts _Tt+1,R25
+ 1406 80931301          sts _Tt,R24
+ 140A           L274:
+ 140A                   .dbline 888
+ 140A 80911301          lds R24,_Tt
+ 140E 90911401          lds R25,_Tt+1
+ 1412 8032              cpi R24,32
+ 1414 E0E0              ldi R30,0
+ 1416 9E07              cpc R25,R30
+ 1418 78F3              brlo L271
+ 141A           X109:
+ 141A                   .dbline 889
+ 141A           ;       DELAY80
+ 141A 2224              clr R2
+ 141C 3324              clr R3
+ 141E 30921401          sts _Tt+1,R3
+ 1422 20921301          sts _Tt,R2
+ 1426 09C0              xjmp L278
+ 1428           L275:
+ 1428                   .dbline 889
+ 1428           L276:
+ 1428                   .dbline 889
+ 1428 80911301          lds R24,_Tt
+ 142C 90911401          lds R25,_Tt+1
+ 1430 0196              adiw R24,1
+ 1432 90931401          sts _Tt+1,R25
+ 1436 80931301          sts _Tt,R24
+ 143A           L278:
+ 143A                   .dbline 889
+ 143A 80911301          lds R24,_Tt
+ 143E 90911401          lds R25,_Tt+1
+ 1442 8032              cpi R24,32
+ 1444 E0E0              ldi R30,0
+ 1446 9E07              cpc R25,R30
+ 1448 78F3              brlo L275
+ 144A           X110:
+ 144A                   .dbline 890
+ 144A           ;       DELAY80
+ 144A 2224              clr R2
+ 144C 3324              clr R3
+ 144E 30921401          sts _Tt+1,R3
+ 1452 20921301          sts _Tt,R2
+ 1456 09C0              xjmp L282
+ 1458           L279:
+ 1458                   .dbline 890
+ 1458           L280:
+ 1458                   .dbline 890
+ 1458 80911301          lds R24,_Tt
+ 145C 90911401          lds R25,_Tt+1
+ 1460 0196              adiw R24,1
+ 1462 90931401          sts _Tt+1,R25
+ 1466 80931301          sts _Tt,R24
+ 146A           L282:
+ 146A                   .dbline 890
+ 146A 80911301          lds R24,_Tt
+ 146E 90911401          lds R25,_Tt+1
+ 1472 8032              cpi R24,32
+ 1474 E0E0              ldi R30,0
+ 1476 9E07              cpc R25,R30
+ 1478 78F3              brlo L279
+ 147A           X111:
+ 147A                   .dbline 891
+ 147A           ;       M1_L    
+ 147A 82B3              in R24,0x12
+ 147C 8B7F              andi R24,251
+ 147E 82BB              out 0x12,R24
+ 1480                   .dbline 892
+ 1480           ;       DELAY40  //放电结束
+ 1480 2224              clr R2
+ 1482 3324              clr R3
+ 1484 30921401          sts _Tt+1,R3
+ 1488 20921301          sts _Tt,R2
+ 148C 09C0              xjmp L286
+ 148E           L283:
+ 148E                   .dbline 892
+ 148E           L284:
+ 148E                   .dbline 892
+ 148E 80911301          lds R24,_Tt
+ 1492 90911401          lds R25,_Tt+1
+ 1496 0196              adiw R24,1
+ 1498 90931401          sts _Tt+1,R25
+ 149C 80931301          sts _Tt,R24
+ 14A0           L286:
+ 14A0                   .dbline 892
+ 14A0 80911301          lds R24,_Tt
+ 14A4 90911401          lds R25,_Tt+1
+ 14A8 8031              cpi R24,16
+ 14AA E0E0              ldi R30,0
+ 14AC 9E07              cpc R25,R30
+ 14AE 78F3              brlo L283
+ 14B0           X112:
+ 14B0                   .dbline 895
+ 14B0           ;       
+ 14B0           ;      //连续发送 ,全0时每位400us，共8400us，全1时每位240us，共5040us
+ 14B0           ;       for(L=21;L>0;L--)
+ 14B0 45E1              ldi R20,21
+ 14B2 0CC1              xjmp L290
+ 14B4           L287:
+ 14B4                   .dbline 896
+ 14B4           ;       {   
+ 14B4                   .dbline 897
+ 14B4           ;         if(T_dat_buf[L])//1，一高二低
+ 14B4 80E0              ldi R24,<_T_dat_buf
+ 14B6 90E0              ldi R25,>_T_dat_buf
+ 14B8 E42F              mov R30,R20
+ 14BA FF27              clr R31
+ 14BC E80F              add R30,R24
+ 14BE F91F              adc R31,R25
+ 14C0 2080              ldd R2,z+0
+ 14C2 2220              tst R2
+ 14C4 09F4              brne X129
+ 14C6 69C0              xjmp L291
+ 14C8           X129:
+ 14C8           X113:
+ 14C8                   .dbline 898
+ 14C8           ;         {                             
+ 14C8                   .dbline 899
+ 14C8           ;               M2_H 
+ 14C8 919A              sbi 0x12,1
+ 14CA                   .dbline 900
+ 14CA           ;               DELAY80
+ 14CA 2224              clr R2
+ 14CC 3324              clr R3
+ 14CE 30921401          sts _Tt+1,R3
+ 14D2 20921301          sts _Tt,R2
+ 14D6 09C0              xjmp L296
+ 14D8           L293:
+ 14D8                   .dbline 900
+ 14D8           L294:
+ 14D8                   .dbline 900
+ 14D8 80911301          lds R24,_Tt
+ 14DC 90911401          lds R25,_Tt+1
+ 14E0 0196              adiw R24,1
+ 14E2 90931401          sts _Tt+1,R25
+ 14E6 80931301          sts _Tt,R24
+ 14EA           L296:
+ 14EA                   .dbline 900
+ 14EA 80911301          lds R24,_Tt
+ 14EE 90911401          lds R25,_Tt+1
+ 14F2 8032              cpi R24,32
+ 14F4 E0E0              ldi R30,0
+ 14F6 9E07              cpc R25,R30
+ 14F8 78F3              brlo L293
+ 14FA           X114:
+ 14FA                   .dbline 901
+ 14FA           ;               M2_L
+ 14FA 82B3              in R24,0x12
+ 14FC 8D7F              andi R24,253
+ 14FE 82BB              out 0x12,R24
+ 1500                   .dbline 902
+ 1500           ;                       DELAY40
+ 1500 2224              clr R2
+ 1502 3324              clr R3
+ 1504 30921401          sts _Tt+1,R3
+ 1508 20921301          sts _Tt,R2
+ 150C 09C0              xjmp L300
+ 150E           L297:
+ 150E                   .dbline 902
+ 150E           L298:
+ 150E                   .dbline 902
+ 150E 80911301          lds R24,_Tt
+ 1512 90911401          lds R25,_Tt+1
+ 1516 0196              adiw R24,1
+ 1518 90931401          sts _Tt+1,R25
+ 151C 80931301          sts _Tt,R24
+ 1520           L300:
+ 1520                   .dbline 902
+ 1520 80911301          lds R24,_Tt
+ 1524 90911401          lds R25,_Tt+1
+ 1528 8031              cpi R24,16
+ 152A E0E0              ldi R30,0
+ 152C 9E07              cpc R25,R30
+ 152E 78F3              brlo L297
+ 1530           X115:
+ 1530                   .dbline 903
+ 1530           ;               M1_H       
+ 1530 929A              sbi 0x12,2
+ 1532                   .dbline 904
+ 1532           ;               DELAY80
+ 1532 2224              clr R2
+ 1534 3324              clr R3
+ 1536 30921401          sts _Tt+1,R3
+ 153A 20921301          sts _Tt,R2
+ 153E 09C0              xjmp L304
+ 1540           L301:
+ 1540                   .dbline 904
+ 1540           L302:
+ 1540                   .dbline 904
+ 1540 80911301          lds R24,_Tt
+ 1544 90911401          lds R25,_Tt+1
+ 1548 0196              adiw R24,1
+ 154A 90931401          sts _Tt+1,R25
+ 154E 80931301          sts _Tt,R24
+ 1552           L304:
+ 1552                   .dbline 904
+ 1552 80911301          lds R24,_Tt
+ 1556 90911401          lds R25,_Tt+1
+ 155A 8032              cpi R24,32
+ 155C E0E0              ldi R30,0
+ 155E 9E07              cpc R25,R30
+ 1560 78F3              brlo L301
+ 1562           X116:
+ 1562                   .dbline 905
+ 1562           ;                       M1_L
+ 1562 82B3              in R24,0x12
+ 1564 8B7F              andi R24,251
+ 1566 82BB              out 0x12,R24
+ 1568                   .dbline 906
+ 1568           ;                       DELAY40
+ 1568 2224              clr R2
+ 156A 3324              clr R3
+ 156C 30921401          sts _Tt+1,R3
+ 1570 20921301          sts _Tt,R2
+ 1574 09C0              xjmp L308
+ 1576           L305:
+ 1576                   .dbline 906
+ 1576           L306:
+ 1576                   .dbline 906
+ 1576 80911301          lds R24,_Tt
+ 157A 90911401          lds R25,_Tt+1
+ 157E 0196              adiw R24,1
+ 1580 90931401          sts _Tt+1,R25
+ 1584 80931301          sts _Tt,R24
+ 1588           L308:
+ 1588                   .dbline 906
+ 1588 80911301          lds R24,_Tt
+ 158C 90911401          lds R25,_Tt+1
+ 1590 8031              cpi R24,16
+ 1592 E0E0              ldi R30,0
+ 1594 9E07              cpc R25,R30
+ 1596 78F3              brlo L305
+ 1598           X117:
+ 1598                   .dbline 907
+ 1598           ;               } 
+ 1598 98C0              xjmp L292
+ 159A           L291:
+ 159A                   .dbline 909
+ 159A           ;        else           //0，一高四低                                           
+ 159A           ;         {
+ 159A                   .dbline 910
+ 159A           ;                       M2_H 
+ 159A 919A              sbi 0x12,1
+ 159C                   .dbline 911
+ 159C           ;               DELAY80
+ 159C 2224              clr R2
+ 159E 3324              clr R3
+ 15A0 30921401          sts _Tt+1,R3
+ 15A4 20921301          sts _Tt,R2
+ 15A8 09C0              xjmp L312
+ 15AA           L309:
+ 15AA                   .dbline 911
+ 15AA           L310:
+ 15AA                   .dbline 911
+ 15AA 80911301          lds R24,_Tt
+ 15AE 90911401          lds R25,_Tt+1
+ 15B2 0196              adiw R24,1
+ 15B4 90931401          sts _Tt+1,R25
+ 15B8 80931301          sts _Tt,R24
+ 15BC           L312:
+ 15BC                   .dbline 911
+ 15BC 80911301          lds R24,_Tt
+ 15C0 90911401          lds R25,_Tt+1
+ 15C4 8032              cpi R24,32
+ 15C6 E0E0              ldi R30,0
+ 15C8 9E07              cpc R25,R30
+ 15CA 78F3              brlo L309
+ 15CC           X118:
+ 15CC                   .dbline 912
+ 15CC           ;               M2_L
+ 15CC 82B3              in R24,0x12
+ 15CE 8D7F              andi R24,253
+ 15D0 82BB              out 0x12,R24
+ 15D2                   .dbline 913
+ 15D2           ;                       DELAY40
+ 15D2 2224              clr R2
+ 15D4 3324              clr R3
+ 15D6 30921401          sts _Tt+1,R3
+ 15DA 20921301          sts _Tt,R2
+ 15DE 09C0              xjmp L316
+ 15E0           L313:
+ 15E0                   .dbline 913
+ 15E0           L314:
+ 15E0                   .dbline 913
+ 15E0 80911301          lds R24,_Tt
+ 15E4 90911401          lds R25,_Tt+1
+ 15E8 0196              adiw R24,1
+ 15EA 90931401          sts _Tt+1,R25
+ 15EE 80931301          sts _Tt,R24
+ 15F2           L316:
+ 15F2                   .dbline 913
+ 15F2 80911301          lds R24,_Tt
+ 15F6 90911401          lds R25,_Tt+1
+ 15FA 8031              cpi R24,16
+ 15FC E0E0              ldi R30,0
+ 15FE 9E07              cpc R25,R30
+ 1600 78F3              brlo L313
+ 1602           X119:
+ 1602                   .dbline 914
+ 1602           ;               M1_H       
+ 1602 929A              sbi 0x12,2
+ 1604                   .dbline 915
+ 1604           ;               DELAY80
+ 1604 2224              clr R2
+ 1606 3324              clr R3
+ 1608 30921401          sts _Tt+1,R3
+ 160C 20921301          sts _Tt,R2
+ 1610 09C0              xjmp L320
+ 1612           L317:
+ 1612                   .dbline 915
+ 1612           L318:
+ 1612                   .dbline 915
+ 1612 80911301          lds R24,_Tt
+ 1616 90911401          lds R25,_Tt+1
+ 161A 0196              adiw R24,1
+ 161C 90931401          sts _Tt+1,R25
+ 1620 80931301          sts _Tt,R24
+ 1624           L320:
+ 1624                   .dbline 915
+ 1624 80911301          lds R24,_Tt
+ 1628 90911401          lds R25,_Tt+1
+ 162C 8032              cpi R24,32
+ 162E E0E0              ldi R30,0
+ 1630 9E07              cpc R25,R30
+ 1632 78F3              brlo L317
+ 1634           X120:
+ 1634                   .dbline 916
+ 1634           ;                       DELAY80
+ 1634 2224              clr R2
+ 1636 3324              clr R3
+ 1638 30921401          sts _Tt+1,R3
+ 163C 20921301          sts _Tt,R2
+ 1640 09C0              xjmp L324
+ 1642           L321:
+ 1642                   .dbline 916
+ 1642           L322:
+ 1642                   .dbline 916
+ 1642 80911301          lds R24,_Tt
+ 1646 90911401          lds R25,_Tt+1
+ 164A 0196              adiw R24,1
+ 164C 90931401          sts _Tt+1,R25
+ 1650 80931301          sts _Tt,R24
+ 1654           L324:
+ 1654                   .dbline 916
+ 1654 80911301          lds R24,_Tt
+ 1658 90911401          lds R25,_Tt+1
+ 165C 8032              cpi R24,32
+ 165E E0E0              ldi R30,0
+ 1660 9E07              cpc R25,R30
+ 1662 78F3              brlo L321
+ 1664           X121:
+ 1664                   .dbline 917
+ 1664           ;                       DELAY80
+ 1664 2224              clr R2
+ 1666 3324              clr R3
+ 1668 30921401          sts _Tt+1,R3
+ 166C 20921301          sts _Tt,R2
+ 1670 09C0              xjmp L328
+ 1672           L325:
+ 1672                   .dbline 917
+ 1672           L326:
+ 1672                   .dbline 917
+ 1672 80911301          lds R24,_Tt
+ 1676 90911401          lds R25,_Tt+1
+ 167A 0196              adiw R24,1
+ 167C 90931401          sts _Tt+1,R25
+ 1680 80931301          sts _Tt,R24
+ 1684           L328:
+ 1684                   .dbline 917
+ 1684 80911301          lds R24,_Tt
+ 1688 90911401          lds R25,_Tt+1
+ 168C 8032              cpi R24,32
+ 168E E0E0              ldi R30,0
+ 1690 9E07              cpc R25,R30
+ 1692 78F3              brlo L325
+ 1694           X122:
+ 1694                   .dbline 918
+ 1694           ;                       M1_L
+ 1694 82B3              in R24,0x12
+ 1696 8B7F              andi R24,251
+ 1698 82BB              out 0x12,R24
+ 169A                   .dbline 919
+ 169A           ;                       DELAY40
+ 169A 2224              clr R2
+ 169C 3324              clr R3
+ 169E 30921401          sts _Tt+1,R3
+ 16A2 20921301          sts _Tt,R2
+ 16A6 09C0              xjmp L332
+ 16A8           L329:
+ 16A8                   .dbline 919
+ 16A8           L330:
+ 16A8                   .dbline 919
+ 16A8 80911301          lds R24,_Tt
+ 16AC 90911401          lds R25,_Tt+1
+ 16B0 0196              adiw R24,1
+ 16B2 90931401          sts _Tt+1,R25
+ 16B6 80931301          sts _Tt,R24
+ 16BA           L332:
+ 16BA                   .dbline 919
+ 16BA 80911301          lds R24,_Tt
+ 16BE 90911401          lds R25,_Tt+1
+ 16C2 8031              cpi R24,16
+ 16C4 E0E0              ldi R30,0
+ 16C6 9E07              cpc R25,R30
+ 16C8 78F3              brlo L329
+ 16CA           X123:
+ 16CA                   .dbline 920
+ 16CA           ;               }
+ 16CA           L292:
+ 16CA                   .dbline 921
+ 16CA           ;     }            
+ 16CA           L288:
+ 16CA                   .dbline 895
+ 16CA 4A95              dec R20
+ 16CC           L290:
+ 16CC                   .dbline 895
+ 16CC 80E0              ldi R24,0
+ 16CE 8417              cp R24,R20
+ 16D0 08F4              brsh X130
+ 16D2 F0CE              xjmp L287
+ 16D4           X130:
+ 16D4           X124:
+ 16D4                   .dbline 923
+ 16D4           ;                  //结束位，一高八低，720us
+ 16D4           ;                   M2_H 
+ 16D4 919A              sbi 0x12,1
+ 16D6                   .dbline 924
+ 16D6           ;                   DELAY80
+ 16D6 2224              clr R2
+ 16D8 3324              clr R3
+ 16DA 30921401          sts _Tt+1,R3
+ 16DE 20921301          sts _Tt,R2
+ 16E2 09C0              xjmp L336
+ 16E4           L333:
+ 16E4                   .dbline 924
+ 16E4           L334:
+ 16E4                   .dbline 924
+ 16E4 80911301          lds R24,_Tt
+ 16E8 90911401          lds R25,_Tt+1
+ 16EC 0196              adiw R24,1
+ 16EE 90931401          sts _Tt+1,R25
+ 16F2 80931301          sts _Tt,R24
+ 16F6           L336:
+ 16F6                   .dbline 924
+ 16F6 80911301          lds R24,_Tt
+ 16FA 90911401          lds R25,_Tt+1
+ 16FE 8032              cpi R24,32
+ 1700 E0E0              ldi R30,0
+ 1702 9E07              cpc R25,R30
+ 1704 78F3              brlo L333
+ 1706           X125:
+ 1706                   .dbline 925
+ 1706           ;               M2_L
+ 1706 82B3              in R24,0x12
+ 1708 8D7F              andi R24,253
+ 170A 82BB              out 0x12,R24
+ 170C                   .dbline 926
+ 170C           ;                       DELAY40/*
+ 170C 2224              clr R2
+ 170E 3324              clr R3
+ 1710 30921401          sts _Tt+1,R3
+ 1714 20921301          sts _Tt,R2
+ 1718 09C0              xjmp L340
+ 171A           L337:
+ 171A                   .dbline 926
+ 171A           L338:
+ 171A                   .dbline 926
+ 171A 80911301          lds R24,_Tt
+ 171E 90911401          lds R25,_Tt+1
+ 1722 0196              adiw R24,1
+ 1724 90931401          sts _Tt+1,R25
+ 1728 80931301          sts _Tt,R24
+ 172C           L340:
+ 172C                   .dbline 926
+ 172C 80911301          lds R24,_Tt
+ 1730 90911401          lds R25,_Tt+1
+ 1734 8031              cpi R24,16
+ 1736 E0E0              ldi R30,0
+ 1738 9E07              cpc R25,R30
+ 173A 78F3              brlo L337
+ 173C           X126:
+ 173C                   .dbline 938
+ 173C           ;               M1_H       
+ 173C           ;               DELAY80
+ 173C           ;                       DELAY80
+ 173C           ;                       DELAY80
+ 173C           ;                       DELAY80
+ 173C           ;                       DELAY80
+ 173C           ;                       DELAY80
+ 173C           ;                       DELAY80
+ 173C           ;                       M1_L
+ 173C           ;                       DELAY40*/
+ 173C           ;                       
+ 173C           ;                       for(L=0;L>50;L++)
+ 173C 4427              clr R20
+ 173E 19C0              xjmp L344
+ 1740           L341:
+ 1740                   .dbline 939
+ 1740           ;                       {
+ 1740                   .dbline 940
+ 1740           ;                         DELAY80
+ 1740 2224              clr R2
+ 1742 3324              clr R3
+ 1744 30921401          sts _Tt+1,R3
+ 1748 20921301          sts _Tt,R2
+ 174C 09C0              xjmp L348
+ 174E           L345:
+ 174E                   .dbline 940
+ 174E           L346:
+ 174E                   .dbline 940
+ 174E 80911301          lds R24,_Tt
+ 1752 90911401          lds R25,_Tt+1
+ 1756 0196              adiw R24,1
+ 1758 90931401          sts _Tt+1,R25
+ 175C 80931301          sts _Tt,R24
+ 1760           L348:
+ 1760                   .dbline 940
+ 1760 80911301          lds R24,_Tt
+ 1764 90911401          lds R25,_Tt+1
+ 1768 8032              cpi R24,32
+ 176A E0E0              ldi R30,0
+ 176C 9E07              cpc R25,R30
+ 176E 78F3              brlo L345
+ 1770           X127:
+ 1770                   .dbline 941
+ 1770           ;                       }
+ 1770           L342:
+ 1770                   .dbline 938
+ 1770 4395              inc R20
+ 1772           L344:
+ 1772                   .dbline 938
+ 1772 82E3              ldi R24,50
+ 1774 8417              cp R24,R20
+ 1776 20F3              brlo L341
+ 1778           X128:
+ 1778                   .dbline 943
+ 1778           ;       
+ 1778           ;       EIFR|=0x08;//清INT3中断标志 
+ 1778 88B7              in R24,0x38
+ 177A 8860              ori R24,8
+ 177C 88BF              out 0x38,R24
+ 177E                   .dbline 944
+ 177E           ;       SREG|=0x80; //开总中断
+ 177E 7894              bset 7
+ 1780                   .dbline -2
+ 1780           L220:
+ 1780                   .dbline 0 ; func end
+ 1780 4991              ld R20,y+
+ 1782 0895              ret
+ 1784                   .dbsym r L 20 c
+ 1784                   .dbend
+ 1784                   .dbfunc e Delay30Ms _Delay30Ms fV
+                        .even
+ 1784           _Delay30Ms::
+ 1784                   .dbline -1
+ 1784                   .dbline 948
+ 1784           ; }
+ 1784           ; 
+ 1784           ; void Delay30Ms(void)//8M主时钟频率，则最大定时7812.5ms
+ 1784           ; {
+ 1784                   .dbline 949
+ 1784           ;       TCCR1B = 0x00; //stop
+ 1784 2224              clr R2
+ 1786 2EBC              out 0x2e,R2
+ 1788                   .dbline 950
+ 1788           ;     TCNT1 = 65301;//30ms  
+ 1788 85E1              ldi R24,65301
+ 178A 9FEF              ldi R25,255
+ 178C 9DBD              out 0x2d,R25
+ 178E 8CBD              out 0x2c,R24
+ 1790                   .dbline 951
+ 1790           ;       TCCR1B = 0x05; //1024分频
+ 1790 85E0              ldi R24,5
+ 1792 8EBD              out 0x2e,R24
+ 1794                   .dbline 952
+ 1794           ;       TIFR|=0x04; //清定时器1中断标志
+ 1794 86B7              in R24,0x36
+ 1796 8460              ori R24,4
+ 1798 86BF              out 0x36,R24
+ 179A           L350:
+ 179A                   .dbline 953
+ 179A           ;       while((TIFR&0x04)==0x00); 
+ 179A           L351:
+ 179A                   .dbline 953
+ 179A 26B6              in R2,0x36
+ 179C 22FE              sbrs R2,2
+ 179E FDCF              rjmp L350
+ 17A0           X131:
+ 17A0                   .dbline 954
+ 17A0           ;       TCCR1B = 0x00; //stop
+ 17A0 2224              clr R2
+ 17A2 2EBC              out 0x2e,R2
+ 17A4                   .dbline 955
+ 17A4           ;       TIFR|=0x04; //清定时器1中断标志
+ 17A4 86B7              in R24,0x36
+ 17A6 8460              ori R24,4
+ 17A8 86BF              out 0x36,R24
+ 17AA                   .dbline -2
+ 17AA           L349:
+ 17AA                   .dbline 0 ; func end
+ 17AA 0895              ret
+ 17AC                   .dbend
+                        .area vector(rom, abs)
+                        .org 72
+ 0048 0C94D60B          jmp _usart0_isr
+                        .area text(rom, con, rel)
+ 17AC                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 17AC                   .dbfunc e usart0_isr _usart0_isr fV
+                        .even
+ 17AC           _usart0_isr::
+ 17AC 2A92              st -y,R2
+ 17AE 8A93              st -y,R24
+ 17B0 9A93              st -y,R25
+ 17B2 EA93              st -y,R30
+ 17B4 FA93              st -y,R31
+ 17B6 2FB6              IN R2,63
+ 17B8 2A92              st -y,R2
+ 17BA                   .dbline -1
+ 17BA                   .dbline 960
+ 17BA           ; }
+ 17BA           ; 
+ 17BA           ; #pragma interrupt_handler usart0_isr:19
+ 17BA           ; void usart0_isr(void) //串口接收中断
+ 17BA           ; {
+ 17BA                   .dbline 961
+ 17BA           ;     Uart0RxData[Uart0RxCounter]=UDR0;//接收串口数据,同时清空串口接收中断标志
+ 17BA 80E0              ldi R24,<_Uart0RxData
+ 17BC 90E0              ldi R25,>_Uart0RxData
+ 17BE E0910901          lds R30,_Uart0RxCounter
+ 17C2 FF27              clr R31
+ 17C4 E80F              add R30,R24
+ 17C6 F91F              adc R31,R25
+ 17C8 2CB0              in R2,0xc
+ 17CA 2082              std z+0,R2
+ 17CC                   .dbline 962
+ 17CC           ;       Uart0RxCounter++;
+ 17CC 80910901          lds R24,_Uart0RxCounter
+ 17D0 8F5F              subi R24,255    ; addi 1
+ 17D2 80930901          sts _Uart0RxCounter,R24
+ 17D6                   .dbline -2
+ 17D6           L353:
+ 17D6                   .dbline 0 ; func end
+ 17D6 2990              ld R2,y+
+ 17D8 2FBE              OUT 63,R2
+ 17DA F991              ld R31,y+
+ 17DC E991              ld R30,y+
+ 17DE 9991              ld R25,y+
+ 17E0 8991              ld R24,y+
+ 17E2 2990              ld R2,y+
+ 17E4 1895              reti
+ 17E6                   .dbend
+                        .area bss(ram, con, rel)
+ 0000                   .dbfile D:\chen\Core\FirmWare_CT\JXY_MCUBootLoader(20170226)\SBL.c
+ 0000           _T2cn::
+ 0000                   .blkb 2
+ 0002                   .dbsym e T2cn _T2cn i
+ 0002           _flash_buf::
+ 0002                   .blkb 258
+ 0104                   .dbsym e flash_buf _flash_buf A[258:258]c
+ 0104           _TimeOutFlag::
+ 0104                   .blkb 1
+ 0105                   .dbsym e TimeOutFlag _TimeOutFlag c
+ 0105           _Timer0Counter::
+ 0105                   .blkb 2
+ 0107                   .dbsym e Timer0Counter _Timer0Counter i
+ 0107           _Uart0RxData::
+ 0107                   .blkb 2
+ 0109                   .dbsym e Uart0RxData _Uart0RxData A[2:2]c
+ 0109           _Uart0RxCounter::
+ 0109                   .blkb 1
+ 010A                   .dbsym e Uart0RxCounter _Uart0RxCounter c
+ 010A           _DSP_PageCn::
+ 010A                   .blkb 1
+ 010B                   .dbsym e DSP_PageCn _DSP_PageCn c
+ 010B           _Timer3Cn::
+ 010B                   .blkb 2
+ 010D                   .dbsym e Timer3Cn _Timer3Cn i
+ 010D           _DownloadSpeed::
+ 010D                   .blkb 1
+ 010E                   .dbsym e DownloadSpeed _DownloadSpeed c
+ 010E           _crc16lo::
+ 010E                   .blkb 1
+ 010F                   .dbsym e crc16lo _crc16lo c
+ 010F           _crc16hi::
+ 010F                   .blkb 1
+ 0110                   .dbsym e crc16hi _crc16hi c
+ 0110           _DataReCn::
+ 0110                   .blkb 2
+ 0112                   .dbsym e DataReCn _DataReCn i
+ 0112           _UpdateBegin::
+ 0112                   .blkb 1
+ 0113                   .dbsym e UpdateBegin _UpdateBegin c
+ 0113           _Tt::
+ 0113                   .blkb 2
+ 0115                   .dbsym e Tt _Tt i
+ 0115           _IntFlag::
+ 0115                   .blkb 1
+ 0116                   .dbsym e IntFlag _IntFlag c
+ 0116           _Int_count::
+ 0116                   .blkb 1
+ 0117                   .dbsym e Int_count _Int_count c
+ 0117           _T_dat_buf::
+ 0117                   .blkb 22
+ 012D                   .dbsym e T_dat_buf _T_dat_buf A[22:22]c
+ 012D           _T_com::
+ 012D                   .blkb 1
+ 012E                   .dbsym e T_com _T_com c
+ 012E           _R_dat::
+ 012E                   .blkb 2
+ 0130                   .dbsym e R_dat _R_dat i
+ 0130           _T_dat::
+ 0130                   .blkb 2
+ 0132                   .dbsym e T_dat _T_dat i
+ 0132           _Rx::
+ 0132                   .blkb 18
+ 0144                   .dbsym e Rx _Rx A[18:18]c
+ 0144           _Motor2Status::
+ 0144                   .blkb 2
+ 0146                   .dbstruct 0 2 .1
+ 0146                   .dbfield 0 PWM F[0:1]
+ 0146                   .dbfield 0 DIR F[1:1]
+ 0146                   .dbfield 0 BrokenStop F[2:1]
+ 0146                   .dbfield 0 CommandStop F[3:1]
+ 0146                   .dbfield 0 OverCurrent F[4:1]
+ 0146                   .dbfield 0 UnderVoltage F[5:1]
+ 0146                   .dbfield 0 StartResult F[6:2]
+ 0146                   .dbfield 0 ThisCurrent F[8:8]
+ 0146                   .dbend
+ 0146                   .dbunion 0 2 MotorStatus
+ 0146                   .dbfield 0 i i
+ 0146                   .dbfield 0 s S[.1]
+ 0146                   .dbend
+ 0146                   .dbsym e Motor2Status _Motor2Status S[MotorStatus]
+ 0146           _Motor1Status::
+ 0146                   .blkb 2
+ 0148                   .dbsym e Motor1Status _Motor1Status S[MotorStatus]
+ 0148           ; }
+ 0148           ; 
+ 0148           ; /*
+ 0148           ; 
+ 0148           ; void EEPROM_write(unsigned int Address,unsigned char Data)    //??EEPROM?
+ 0148           ; {//?????1MHz,???EEPROM??????8.5ms
+ 0148           ;     while(EECR&0x02);                   // ??????????
+ 0148           ;     EEAR=Address;
+ 0148           ;     EEDR=Data;                                // ??????????
+ 0148           ;     EECR|=0x04;                         //??EEMWE
+ 0148           ;     EECR|=0x02;                         //??EEWE ??????
+ 0148           ; }
+ 0148           ; 
+ 0148           ; unsigned char EEPROM_read(unsigned int Address)                               //??EEPROM?
+ 0148           ; {
+ 0148           ;     while(EECR&0x02);                                 //?????????
+ 0148           ;     EEAR = Address;                     //???????                                             
+ 0148           ;       EECR|=0x01;                                     //??EERE ??????
+ 0148           ;     return EEDR;                              //??????????
+ 0148           ; }   */

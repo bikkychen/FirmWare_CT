@@ -1,0 +1,1 @@
+hex2000 -romwidth 16 -memwidth 16  -i ad.out -o ad.hex 

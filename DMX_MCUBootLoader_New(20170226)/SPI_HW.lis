@@ -1,0 +1,688 @@
+                        .module SPI_HW.C
+                        .area text(rom, con, rel)
+ 0000                   .dbfile SPI_HW.C
+ 0000                   .dbfile D:\chen\Core\FirmWare_CT\DMX_MCUBootLoader(20170226_ZKY3_V20）\SPI_HW.C
+ 0000                   .dbfunc e Read374Byte _Read374Byte fc
+ 0000           ;          mAddr -> R16
+                        .even
+ 0000           _Read374Byte::
+ 0000                   .dbline -1
+ 0000                   .dbline 29
+ 0000           ; 
+ 0000           ; #include <string.h>
+ 0000           ; #include <stdio.h>
+ 0000           ; #include      "HAL.H"                 // 其它单片机需修改HAL*硬件抽象层的几个文件
+ 0000           ; /*
+ 0000           ; #define       CH374_SPI_SCS0                  {DDRB|=0x10;PORTB&=0xef;}                
+ 0000           ; #define       CH374_SPI_SCS1                  {DDRB|=0x10;PORTB|=0x10;}
+ 0000           ; */
+ 0000           ; #define       CH374_SPI_SCS0                  {DDRB|=0x01;PORTB&=0xFE;}                
+ 0000           ; #define       CH374_SPI_SCS1                  {DDRB|=0x01;PORTB|=0x01;}       
+ 0000           ;       
+ 0000           ; extern unsigned char EP2SendBusy;
+ 0000           ; /*
+ 0000           ; #define       CH374_SPI_SCS0                  PORTB&=0xfe;             
+ 0000           ; #define       CH374_SPI_SCS1                  PORTB|=0x01;             
+ 0000           ;  
+ 0000           ; #define       CH374_SPI_SDI0                  PORTB&=0xfb;             
+ 0000           ; #define       CH374_SPI_SDI1                  PORTB|=0x04;             
+ 0000           ; 
+ 0000           ; #define       CH374_SPI_SDO                   (PINB&0xf7)                
+ 0000           ; 
+ 0000           ; #define       CH374_SPI_SCK1                  PORTB|=0x02;             
+ 0000           ; #define       CH374_SPI_SCK0                  PORTB&=0xfd;     
+ 0000           ; */
+ 0000           ; void EP2Send(UINT8 mLen, PUINT8 mBuf);
+ 0000           ; void EP2SendConst(UINT8 mLen, const unsigned char  *mBuf);
+ 0000           ; 
+ 0000           ; UINT8 Read374Byte( UINT8 mAddr )         // 从指定寄存器读取数据 
+ 0000           ; {
+ 0000                   .dbline 30
+ 0000           ;       CH374_SPI_SCS0   //SPI片选有效
+ 0000                   .dbline 30
+ 0000 B89A              sbi 0x17,0
+ 0002                   .dbline 30
+ 0002 88B3              in R24,0x18
+ 0004 8E7F              andi R24,254
+ 0006 88BB              out 0x18,R24
+ 0008                   .dbline 30
+ 0008                   .dbline 32
+ 0008           ;       
+ 0008           ;       SPDR = mAddr; // 启动数据传输  发送读地址
+ 0008 0FB9              out 0xf,R16
+ 000A           L2:
+ 000A                   .dbline 33
+ 000A           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 000A           L3:
+ 000A                   .dbline 33
+ 000A 779B              sbis 0xe,7
+ 000C FECF              rjmp L2
+ 000E           X0:
+ 000E                   .dbline 35
+ 000E           ;       
+ 000E           ;       SPDR = 0xc0; // 启动数据传输  发送读命令 CMD_SPI_374READ=0xc0
+ 000E 80EC              ldi R24,192
+ 0010 8FB9              out 0xf,R24
+ 0012           L5:
+ 0012                   .dbline 36
+ 0012           ;     while((SPSR & 0x80)==0x00); // 等待传输结束  
+ 0012           L6:
+ 0012                   .dbline 36
+ 0012 779B              sbis 0xe,7
+ 0014 FECF              rjmp L5
+ 0016           X1:
+ 0016                   .dbline 38
+ 0016           ;       
+ 0016           ;       SPDR = 0x00;
+ 0016 2224              clr R2
+ 0018 2FB8              out 0xf,R2
+ 001A           L8:
+ 001A                   .dbline 39
+ 001A           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 001A           L9:
+ 001A                   .dbline 39
+ 001A 779B              sbis 0xe,7
+ 001C FECF              rjmp L8
+ 001E           X2:
+ 001E                   .dbline 41
+ 001E           ;       
+ 001E           ;     CH374_SPI_SCS1              // SPI停止
+ 001E                   .dbline 41
+ 001E B89A              sbi 0x17,0
+ 0020                   .dbline 41
+ 0020 C09A              sbi 0x18,0
+ 0022                   .dbline 41
+ 0022                   .dbline 42
+ 0022           ;       return SPDR;
+ 0022 0FB1              in R16,0xf
+ 0024                   .dbline -2
+ 0024           L1:
+ 0024                   .dbline 0 ; func end
+ 0024 0895              ret
+ 0026                   .dbsym r mAddr 16 c
+ 0026                   .dbend
+ 0026                   .dbfunc e Write374Byte _Write374Byte fV
+ 0026           ;          mData -> R18
+ 0026           ;          mAddr -> R16
+                        .even
+ 0026           _Write374Byte::
+ 0026                   .dbline -1
+ 0026                   .dbline 46
+ 0026           ; }
+ 0026           ; 
+ 0026           ; void Write374Byte( UINT8 mAddr, UINT8 mData )  // 向指定寄存器写入数据 
+ 0026           ; {
+ 0026                   .dbline 48
+ 0026           ; 
+ 0026           ;       CH374_SPI_SCS0   //SPI片选有效
+ 0026                   .dbline 48
+ 0026 B89A              sbi 0x17,0
+ 0028                   .dbline 48
+ 0028 88B3              in R24,0x18
+ 002A 8E7F              andi R24,254
+ 002C 88BB              out 0x18,R24
+ 002E                   .dbline 48
+ 002E                   .dbline 50
+ 002E           ;       
+ 002E           ;       SPDR = mAddr; // 启动数据传输  发送读地址
+ 002E 0FB9              out 0xf,R16
+ 0030           L12:
+ 0030                   .dbline 51
+ 0030           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 0030           L13:
+ 0030                   .dbline 51
+ 0030 779B              sbis 0xe,7
+ 0032 FECF              rjmp L12
+ 0034           X3:
+ 0034                   .dbline 53
+ 0034           ;       
+ 0034           ;       SPDR = 0x80; // 启动数据传输  发送写命令 CMD_SPI_374WRITE=0x80
+ 0034 80E8              ldi R24,128
+ 0036 8FB9              out 0xf,R24
+ 0038           L15:
+ 0038                   .dbline 54
+ 0038           ;     while((SPSR & 0x80)==0x00); // 等待传输结束  
+ 0038           L16:
+ 0038                   .dbline 54
+ 0038 779B              sbis 0xe,7
+ 003A FECF              rjmp L15
+ 003C           X4:
+ 003C                   .dbline 56
+ 003C           ;       
+ 003C           ;       SPDR = mData;
+ 003C 2FB9              out 0xf,R18
+ 003E           L18:
+ 003E                   .dbline 57
+ 003E           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 003E           L19:
+ 003E                   .dbline 57
+ 003E 779B              sbis 0xe,7
+ 0040 FECF              rjmp L18
+ 0042           X5:
+ 0042                   .dbline 59
+ 0042           ;       
+ 0042           ;     CH374_SPI_SCS1              // SPI停止
+ 0042                   .dbline 59
+ 0042 B89A              sbi 0x17,0
+ 0044                   .dbline 59
+ 0044 C09A              sbi 0x18,0
+ 0046                   .dbline 59
+ 0046                   .dbline -2
+ 0046           L11:
+ 0046                   .dbline 0 ; func end
+ 0046 0895              ret
+ 0048                   .dbsym r mData 18 c
+ 0048                   .dbsym r mAddr 16 c
+ 0048                   .dbend
+ 0048                   .dbfunc e Read374Block _Read374Block fV
+ 0048           ;           mBuf -> R10,R11
+ 0048           ;           mLen -> R18
+ 0048           ;          mAddr -> R16
+                        .even
+ 0048           _Read374Block::
+ 0048 AA92              st -y,R10
+ 004A BA92              st -y,R11
+ 004C AA80              ldd R10,y+2
+ 004E BB80              ldd R11,y+3
+ 0050                   .dbline -1
+ 0050                   .dbline 64
+ 0050           ; 
+ 0050           ; }
+ 0050           ; 
+ 0050           ; void Read374Block( UINT8 mAddr, UINT8 mLen, PUINT8 mBuf )  // 从指定起始地址读出数据块 
+ 0050           ; {
+ 0050                   .dbline 65
+ 0050           ;       CH374_SPI_SCS0    //SPI片选有效
+ 0050                   .dbline 65
+ 0050 B89A              sbi 0x17,0
+ 0052                   .dbline 65
+ 0052 88B3              in R24,0x18
+ 0054 8E7F              andi R24,254
+ 0056 88BB              out 0x18,R24
+ 0058                   .dbline 65
+ 0058                   .dbline 67
+ 0058           ;        
+ 0058           ;       SPDR = mAddr; // 启动数据传输  发送读地址
+ 0058 0FB9              out 0xf,R16
+ 005A           L22:
+ 005A                   .dbline 68
+ 005A           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 005A           L23:
+ 005A                   .dbline 68
+ 005A 779B              sbis 0xe,7
+ 005C FECF              rjmp L22
+ 005E           X6:
+ 005E                   .dbline 70
+ 005E           ;       
+ 005E           ;       SPDR = 0xc0; // 启动数据传输  发送读命令 CMD_SPI_374READ=0xc0
+ 005E 80EC              ldi R24,192
+ 0060 8FB9              out 0xf,R24
+ 0062           L25:
+ 0062                   .dbline 71
+ 0062           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 0062           L26:
+ 0062                   .dbline 71
+ 0062 779B              sbis 0xe,7
+ 0064 FECF              rjmp L25
+ 0066           X7:
+ 0066 08C0              xjmp L29
+ 0068           L28:
+ 0068                   .dbline 74
+ 0068           ;       
+ 0068           ;       while ( mLen -- )
+ 0068           ;       {
+ 0068                   .dbline 75
+ 0068           ;        SPDR = 0x00;
+ 0068 2224              clr R2
+ 006A 2FB8              out 0xf,R2
+ 006C           L31:
+ 006C                   .dbline 76
+ 006C           ;      while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 006C           L32:
+ 006C                   .dbline 76
+ 006C 779B              sbis 0xe,7
+ 006E FECF              rjmp L31
+ 0070           X8:
+ 0070                   .dbline 77
+ 0070           ;        *mBuf++ = SPDR;
+ 0070 2FB0              in R2,0xf
+ 0072 F501              movw R30,R10
+ 0074 2192              st Z+,R2
+ 0076 5F01              movw R10,R30
+ 0078                   .dbline 78
+ 0078           ;        }
+ 0078           L29:
+ 0078                   .dbline 73
+ 0078 222E              mov R2,R18
+ 007A 3324              clr R3
+ 007C 2150              subi R18,1
+ 007E 2220              tst R2
+ 0080 99F7              brne L28
+ 0082           X9:
+ 0082                   .dbline 79
+ 0082           ;       CH374_SPI_SCS1              //SPI停止
+ 0082                   .dbline 79
+ 0082 B89A              sbi 0x17,0
+ 0084                   .dbline 79
+ 0084 C09A              sbi 0x18,0
+ 0086                   .dbline 79
+ 0086                   .dbline -2
+ 0086           L21:
+ 0086                   .dbline 0 ; func end
+ 0086 B990              ld R11,y+
+ 0088 A990              ld R10,y+
+ 008A 0895              ret
+ 008C                   .dbsym r mBuf 10 pc
+ 008C                   .dbsym r mLen 18 c
+ 008C                   .dbsym r mAddr 16 c
+ 008C                   .dbend
+ 008C                   .dbfunc e Write374Block _Write374Block fV
+ 008C           ;           mBuf -> R10,R11
+ 008C           ;           mLen -> R18
+ 008C           ;          mAddr -> R16
+                        .even
+ 008C           _Write374Block::
+ 008C AA92              st -y,R10
+ 008E BA92              st -y,R11
+ 0090 AA80              ldd R10,y+2
+ 0092 BB80              ldd R11,y+3
+ 0094                   .dbline -1
+ 0094                   .dbline 83
+ 0094           ; }
+ 0094           ; 
+ 0094           ; void Write374Block( UINT8 mAddr, UINT8 mLen, PUINT8 mBuf )  // 向指定起始地址写入数据块 
+ 0094           ; {
+ 0094                   .dbline 84
+ 0094           ;       CH374_SPI_SCS0     //SPI片选有效
+ 0094                   .dbline 84
+ 0094 B89A              sbi 0x17,0
+ 0096                   .dbline 84
+ 0096 88B3              in R24,0x18
+ 0098 8E7F              andi R24,254
+ 009A 88BB              out 0x18,R24
+ 009C                   .dbline 84
+ 009C                   .dbline 86
+ 009C           ;        
+ 009C           ;       SPDR = mAddr; // 启动数据传输  发送读地址
+ 009C 0FB9              out 0xf,R16
+ 009E           L35:
+ 009E                   .dbline 87
+ 009E           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 009E           L36:
+ 009E                   .dbline 87
+ 009E 779B              sbis 0xe,7
+ 00A0 FECF              rjmp L35
+ 00A2           X10:
+ 00A2                   .dbline 89
+ 00A2           ;       
+ 00A2           ;       SPDR = 0x80; // 启动数据传输  发送写命令 CMD_SPI_374WRITE=0x80
+ 00A2 80E8              ldi R24,128
+ 00A4 8FB9              out 0xf,R24
+ 00A6           L38:
+ 00A6                   .dbline 90
+ 00A6           ;     while((SPSR & 0x80)==0x00); // 等待传输结束  
+ 00A6           L39:
+ 00A6                   .dbline 90
+ 00A6 779B              sbis 0xe,7
+ 00A8 FECF              rjmp L38
+ 00AA           X11:
+ 00AA 06C0              xjmp L42
+ 00AC           L41:
+ 00AC                   .dbline 93
+ 00AC           ;       
+ 00AC           ;       while ( mLen -- ) 
+ 00AC           ;       {
+ 00AC                   .dbline 94
+ 00AC           ;        SPDR = *mBuf++;
+ 00AC F501              movw R30,R10
+ 00AE 2190              ld R2,Z+
+ 00B0 5F01              movw R10,R30
+ 00B2 2FB8              out 0xf,R2
+ 00B4           L44:
+ 00B4                   .dbline 95
+ 00B4           ;      while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 00B4           L45:
+ 00B4                   .dbline 95
+ 00B4 779B              sbis 0xe,7
+ 00B6 FECF              rjmp L44
+ 00B8           X12:
+ 00B8                   .dbline 96
+ 00B8           ;        }
+ 00B8           L42:
+ 00B8                   .dbline 92
+ 00B8 222E              mov R2,R18
+ 00BA 3324              clr R3
+ 00BC 2150              subi R18,1
+ 00BE 2220              tst R2
+ 00C0 A9F7              brne L41
+ 00C2           X13:
+ 00C2                   .dbline 98
+ 00C2           ;       
+ 00C2           ;       CH374_SPI_SCS1             //SPI停止
+ 00C2                   .dbline 98
+ 00C2 B89A              sbi 0x17,0
+ 00C4                   .dbline 98
+ 00C4 C09A              sbi 0x18,0
+ 00C6                   .dbline 98
+ 00C6                   .dbline -2
+ 00C6           L34:
+ 00C6                   .dbline 0 ; func end
+ 00C6 B990              ld R11,y+
+ 00C8 A990              ld R10,y+
+ 00CA 0895              ret
+ 00CC                   .dbsym r mBuf 10 pc
+ 00CC                   .dbsym r mLen 18 c
+ 00CC                   .dbsym r mAddr 16 c
+ 00CC                   .dbend
+ 00CC                   .dbfunc e Write374Block2 _Write374Block2 fV
+ 00CC           ;           mBuf -> R10,R11
+ 00CC           ;           mLen -> R18
+ 00CC           ;          mAddr -> R16
+                        .even
+ 00CC           _Write374Block2::
+ 00CC AA92              st -y,R10
+ 00CE BA92              st -y,R11
+ 00D0 AA80              ldd R10,y+2
+ 00D2 BB80              ldd R11,y+3
+ 00D4                   .dbline -1
+ 00D4                   .dbline 102
+ 00D4           ; }
+ 00D4           ; 
+ 00D4           ; void Write374Block2( UINT8 mAddr, UINT8 mLen,const unsigned char  *mBuf )  // 向指定起始地址写入数据块 
+ 00D4           ; {
+ 00D4                   .dbline 103
+ 00D4           ;       CH374_SPI_SCS0      //SPI片选有效
+ 00D4                   .dbline 103
+ 00D4 B89A              sbi 0x17,0
+ 00D6                   .dbline 103
+ 00D6 88B3              in R24,0x18
+ 00D8 8E7F              andi R24,254
+ 00DA 88BB              out 0x18,R24
+ 00DC                   .dbline 103
+ 00DC                   .dbline 105
+ 00DC           ;        
+ 00DC           ;       SPDR = mAddr; // 启动数据传输  发送读地址
+ 00DC 0FB9              out 0xf,R16
+ 00DE           L48:
+ 00DE                   .dbline 106
+ 00DE           ;     while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 00DE           L49:
+ 00DE                   .dbline 106
+ 00DE 779B              sbis 0xe,7
+ 00E0 FECF              rjmp L48
+ 00E2           X14:
+ 00E2                   .dbline 108
+ 00E2           ;       
+ 00E2           ;       SPDR = 0x80; // 启动数据传输  发送写命令 CMD_SPI_374WRITE=0x80
+ 00E2 80E8              ldi R24,128
+ 00E4 8FB9              out 0xf,R24
+ 00E6           L51:
+ 00E6                   .dbline 109
+ 00E6           ;     while((SPSR & 0x80)==0x00); // 等待传输结束  
+ 00E6           L52:
+ 00E6                   .dbline 109
+ 00E6 779B              sbis 0xe,7
+ 00E8 FECF              rjmp L51
+ 00EA           X15:
+ 00EA 06C0              xjmp L55
+ 00EC           L54:
+ 00EC                   .dbline 112
+ 00EC           ;       
+ 00EC           ;       while ( mLen -- ) 
+ 00EC           ;       {
+ 00EC                   .dbline 113
+ 00EC           ;        SPDR = *mBuf++;
+ 00EC F501              movw R30,R10
+ 00EE 2190              ld R2,Z+
+ 00F0 5F01              movw R10,R30
+ 00F2 2FB8              out 0xf,R2
+ 00F4           L57:
+ 00F4                   .dbline 114
+ 00F4           ;      while((SPSR & 0x80)==0x00); // 等待传输结束 
+ 00F4           L58:
+ 00F4                   .dbline 114
+ 00F4 779B              sbis 0xe,7
+ 00F6 FECF              rjmp L57
+ 00F8           X16:
+ 00F8                   .dbline 115
+ 00F8           ;        }
+ 00F8           L55:
+ 00F8                   .dbline 111
+ 00F8 222E              mov R2,R18
+ 00FA 3324              clr R3
+ 00FC 2150              subi R18,1
+ 00FE 2220              tst R2
+ 0100 A9F7              brne L54
+ 0102           X17:
+ 0102                   .dbline 117
+ 0102           ;       
+ 0102           ;       CH374_SPI_SCS1              //SPI停止
+ 0102                   .dbline 117
+ 0102 B89A              sbi 0x17,0
+ 0104                   .dbline 117
+ 0104 C09A              sbi 0x18,0
+ 0106                   .dbline 117
+ 0106                   .dbline -2
+ 0106           L47:
+ 0106                   .dbline 0 ; func end
+ 0106 B990              ld R11,y+
+ 0108 A990              ld R10,y+
+ 010A 0895              ret
+ 010C                   .dbsym r mBuf 10 pc
+ 010C                   .dbsym r mLen 18 c
+ 010C                   .dbsym r mAddr 16 c
+ 010C                   .dbend
+ 010C                   .dbfunc e EP2SendConst _EP2SendConst fV
+ 010C           ;           mBuf -> R12,R13
+ 010C           ;           mLen -> R10
+                        .even
+ 010C           _EP2SendConst::
+ 010C 0E940000          xcall push_xgset003C
+ 0110 6901              movw R12,R18
+ 0112 A02E              mov R10,R16
+ 0114 2297              sbiw R28,2
+ 0116                   .dbline -1
+ 0116                   .dbline 121
+ 0116           ; }
+ 0116           ; 
+ 0116           ; void EP2SendConst(UINT8 mLen, const unsigned char  *mBuf)
+ 0116           ; {   while(EP2SendBusy);
+ 0116           L61:
+ 0116                   .dbline 121
+ 0116           L62:
+ 0116                   .dbline 121
+ 0116 20900000          lds R2,_EP2SendBusy
+ 011A 2220              tst R2
+ 011C E1F7              brne L61
+ 011E           X18:
+ 011E                   .dbline 122
+ 011E           ;       Write374Block2( RAM_ENDP2_TRAN, mLen,mBuf );
+ 011E D982              std y+1,R13
+ 0120 C882              std y+0,R12
+ 0122 2A2D              mov R18,R10
+ 0124 00E4              ldi R16,64
+ 0126 D2DF              xcall _Write374Block2
+ 0128                   .dbline 123
+ 0128           ;       Write374Byte( REG_USB_LENGTH, mLen );
+ 0128 2A2D              mov R18,R10
+ 012A 0BE0              ldi R16,11
+ 012C 7CDF              xcall _Write374Byte
+ 012E                   .dbline 124
+ 012E           ;       Write374Byte( REG_USB_ENDP2, M_SET_EP2_TRAN_ACK( Read374Byte( REG_USB_ENDP2 ) ) ^ BIT_EP2_RECV_TOG );
+ 012E 0EE0              ldi R16,14
+ 0130 67DF              xcall _Read374Byte
+ 0132 80E8              ldi R24,128
+ 0134 90E0              ldi R25,0
+ 0136 202F              mov R18,R16
+ 0138 3327              clr R19
+ 013A 2C7F              andi R18,252
+ 013C 2827              eor R18,R24
+ 013E 3927              eor R19,R25
+ 0140 0EE0              ldi R16,14
+ 0142 71DF              xcall _Write374Byte
+ 0144                   .dbline 125
+ 0144           ;       EP2SendBusy=1;
+ 0144 81E0              ldi R24,1
+ 0146 80930000          sts _EP2SendBusy,R24
+ 014A                   .dbline -2
+ 014A           L60:
+ 014A                   .dbline 0 ; func end
+ 014A 2296              adiw R28,2
+ 014C 0C940000          xjmp pop_xgset003C
+ 0150                   .dbsym r mBuf 12 pc
+ 0150                   .dbsym r mLen 10 c
+ 0150                   .dbend
+ 0150                   .dbfunc e EP2Send _EP2Send fV
+ 0150           ;           mBuf -> R12,R13
+ 0150           ;           mLen -> R10
+                        .even
+ 0150           _EP2Send::
+ 0150 0E940000          xcall push_xgset003C
+ 0154 6901              movw R12,R18
+ 0156 A02E              mov R10,R16
+ 0158 2297              sbiw R28,2
+ 015A                   .dbline -1
+ 015A                   .dbline 129
+ 015A           ; }
+ 015A           ; 
+ 015A           ; void EP2Send(UINT8 mLen, PUINT8 mBuf)
+ 015A           ; {   while(EP2SendBusy);
+ 015A           L65:
+ 015A                   .dbline 129
+ 015A           L66:
+ 015A                   .dbline 129
+ 015A 20900000          lds R2,_EP2SendBusy
+ 015E 2220              tst R2
+ 0160 E1F7              brne L65
+ 0162           X19:
+ 0162                   .dbline 130
+ 0162           ;       Write374Block( RAM_ENDP2_TRAN, mLen,mBuf );
+ 0162 D982              std y+1,R13
+ 0164 C882              std y+0,R12
+ 0166 2A2D              mov R18,R10
+ 0168 00E4              ldi R16,64
+ 016A 90DF              xcall _Write374Block
+ 016C                   .dbline 131
+ 016C           ;       Write374Byte( REG_USB_LENGTH, mLen );
+ 016C 2A2D              mov R18,R10
+ 016E 0BE0              ldi R16,11
+ 0170 5ADF              xcall _Write374Byte
+ 0172                   .dbline 132
+ 0172           ;       Write374Byte( REG_USB_ENDP2, M_SET_EP2_TRAN_ACK( Read374Byte( REG_USB_ENDP2 ) ) ^ BIT_EP2_RECV_TOG );
+ 0172 0EE0              ldi R16,14
+ 0174 45DF              xcall _Read374Byte
+ 0176 80E8              ldi R24,128
+ 0178 90E0              ldi R25,0
+ 017A 202F              mov R18,R16
+ 017C 3327              clr R19
+ 017E 2C7F              andi R18,252
+ 0180 2827              eor R18,R24
+ 0182 3927              eor R19,R25
+ 0184 0EE0              ldi R16,14
+ 0186 4FDF              xcall _Write374Byte
+ 0188                   .dbline 133
+ 0188           ;       EP2SendBusy=1;
+ 0188 81E0              ldi R24,1
+ 018A 80930000          sts _EP2SendBusy,R24
+ 018E                   .dbline -2
+ 018E           L64:
+ 018E                   .dbline 0 ; func end
+ 018E 2296              adiw R28,2
+ 0190 0C940000          xjmp pop_xgset003C
+ 0194                   .dbsym r mBuf 12 pc
+ 0194                   .dbsym r mLen 10 c
+ 0194                   .dbend
+ 0194           ; }
+ 0194           ; 
+ 0194           ; /*
+ 0194           ; void  Spi374OutByte( UINT8 d )  
+ 0194           ; {   
+ 0194           ;       UINT8   i;
+ 0194           ;       for ( i = 0; i < 8; i ++ ) 
+ 0194           ;       {
+ 0194           ;               CH374_SPI_SCK0
+ 0194           ;               if ( d & 0x80 ) 
+ 0194           ;                CH374_SPI_SDI1
+ 0194           ;               else 
+ 0194           ;                CH374_SPI_SDI0
+ 0194           ;                
+ 0194           ;               CH374_SPI_SCK1     // CH374在时钟上升沿采样输入  
+ 0194           ;               d<<=1;
+ 0194           ;       }
+ 0194           ;       
+ 0194           ;       CH374_SPI_SCK0
+ 0194           ; }
+ 0194           ; 
+ 0194           ; UINT8 Spi374InByte( void )   
+ 0194           ; {   
+ 0194           ;       UINT8   i, d;
+ 0194           ;       d = 0;
+ 0194           ;       
+ 0194           ;  
+ 0194           ;       for ( i = 0; i < 8; i ++ ) 
+ 0194           ;       {   d<<=1;
+ 0194           ;       
+ 0194           ;               CH374_SPI_SCK1 
+ 0194           ; 
+ 0194           ;               CH374_SPI_SCK0        // CH374在时钟下降沿输出  
+ 0194           ;  
+ 0194           ;               
+ 0194           ;               if ( CH374_SPI_SDO ) 
+ 0194           ;                     d|=0x01;  
+ 0194           ;       }
+ 0194           ;       
+ 0194           ;       CH374_SPI_SCK0
+ 0194           ;       return( d );
+ 0194           ; }
+ 0194           ; 
+ 0194           ; 
+ 0194           ; UINT8 Read374Byte( UINT8 addr )  
+ 0194           ; {
+ 0194           ;       UINT8   d;
+ 0194           ;       CH374_SPI_SCS0
+ 0194           ;       Spi374OutByte( addr );
+ 0194           ;       Spi374OutByte( 0xc0);
+ 0194           ;       d = Spi374InByte( );
+ 0194           ;       CH374_SPI_SCS1
+ 0194           ;       return( d );
+ 0194           ; }
+ 0194           ; 
+ 0194           ; void  Write374Byte( UINT8 addr, UINT8 mData )   
+ 0194           ; {
+ 0194           ;       CH374_SPI_SCS0
+ 0194           ;       Spi374OutByte( addr );
+ 0194           ;       Spi374OutByte( 0x80 );
+ 0194           ;       Spi374OutByte( mData );
+ 0194           ;       CH374_SPI_SCS1
+ 0194           ; }
+ 0194           ; 
+ 0194           ; void  Read374Block( UINT8 addr, UINT8 mLen, PUINT8 mBuf )   
+ 0194           ; {
+ 0194           ;       CH374_SPI_SCS0
+ 0194           ;       Spi374OutByte( addr );
+ 0194           ;       Spi374OutByte( 0xc0 );
+ 0194           ;       while ( mLen -- ) 
+ 0194           ;        *mBuf++ = Spi374InByte( );
+ 0194           ;     CH374_SPI_SCS1
+ 0194           ; }
+ 0194           ; 
+ 0194           ; void  Write374Block( UINT8 addr, UINT8 mLen, PUINT8 mBuf )  
+ 0194           ; {
+ 0194           ;       CH374_SPI_SCS0
+ 0194           ;       Spi374OutByte( addr );
+ 0194           ;       Spi374OutByte( 0x80 );
+ 0194           ;       while ( mLen -- ) 
+ 0194           ;        Spi374OutByte( *mBuf++ );
+ 0194           ;     CH374_SPI_SCS1
+ 0194           ; }
+ 0194           ; 
+ 0194           ; void Write374Block2( UINT8 addr, UINT8 mLen,const unsigned char  *mBuf )  // 向指定起始地址写入数据块 
+ 0194           ; {
+ 0194           ;       CH374_SPI_SCS0
+ 0194           ;       Spi374OutByte( addr );
+ 0194           ;       Spi374OutByte( 0x80 );
+ 0194           ;       while ( mLen -- ) 
+ 0194           ;        Spi374OutByte( *mBuf++ );
+ 0194           ;     CH374_SPI_SCS1
+ 0194           ; }
+ 0194           ; */

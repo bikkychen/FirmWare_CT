@@ -1,0 +1,321 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.5.4	//
+!_TAG_REVISION_NAME	MCHPTags	//
+!_TAG_REVISION_VERSION	6.0.1	//
+AD_10BIT	E:\ZYLJA-20140908(V1.0)\define.h	189;"	p	line:189	signature:(void)
+AD_10BIT	E:\ZYLJA-20140908(V1.0)\device.c	246;"	f	line:246	signature:(void)
+AD_value	E:\ZYLJA-20140908(V1.0)\main.c	8;"	v	line:8
+Adjzero_addr::0XFA	E:\ZYLJA-20140908(V1.0)\define.h	35;"	d	line:35
+Allinfo	E:\ZYLJA-20140908(V1.0)\define.h	128;"	u	line:128
+BLOCKNUM::1024	E:\ZYLJA-20140908(V1.0)\define.h	18;"	d	line:18
+BLOCKYU::0XFFF	E:\ZYLJA-20140908(V1.0)\define.h	20;"	d	line:20
+CS0::{CS=0;Nop;Nop;Nop;Nop;Nop;}	E:\ZYLJA-20140908(V1.0)\define.h	56;"	d	line:56
+CS1::{Nop;Nop;Nop;Nop;Nop;CS=1;}	E:\ZYLJA-20140908(V1.0)\define.h	57;"	d	line:57
+CS::PORTDbits.RD3	E:\ZYLJA-20140908(V1.0)\define.h	54;"	d	line:54
+CSZERO	E:\ZYLJA-20140908(V1.0)\define.h	123;"	m	line:123	struct:Testinfo
+CS_TRIS::TRISDbits.TRISD3	E:\ZYLJA-20140908(V1.0)\define.h	55;"	d	line:55
+CSzero_addr::0XFC	E:\ZYLJA-20140908(V1.0)\define.h	36;"	d	line:36
+Caltab_addr::0X3000	E:\ZYLJA-20140908(V1.0)\define.h	13;"	d	line:13
+Caltab_block::3	E:\ZYLJA-20140908(V1.0)\define.h	12;"	d	line:12
+Com_mode	E:\ZYLJA-20140908(V1.0)\define.h	137;"	p	line:137	signature:(void)
+Com_mode	E:\ZYLJA-20140908(V1.0)\main.c	166;"	f	line:166	signature:(void)
+Count_addr::0XF6	E:\ZYLJA-20140908(V1.0)\define.h	31;"	d	line:31
+DIN::PORTDbits.RD6	E:\ZYLJA-20140908(V1.0)\define.h	58;"	d	line:58
+DIN_TRIS::TRISDbits.TRISD6	E:\ZYLJA-20140908(V1.0)\define.h	59;"	d	line:59
+DOUT::PORTDbits.RD5	E:\ZYLJA-20140908(V1.0)\define.h	60;"	d	line:60
+DOUT_TRIS::TRISDbits.TRISD5	E:\ZYLJA-20140908(V1.0)\define.h	61;"	d	line:61
+DataFull	E:\ZYLJA-20140908(V1.0)\define.h	117;"	m	line:117	struct:Testinfo
+DataFull_addr::0XF5	E:\ZYLJA-20140908(V1.0)\define.h	30;"	d	line:30
+Data_addr::0X5000	E:\ZYLJA-20140908(V1.0)\define.h	17;"	d	line:17
+Delay_mS	E:\ZYLJA-20140908(V1.0)\define.h	147;"	p	line:147	signature:(uint)
+Delay_mS	E:\ZYLJA-20140908(V1.0)\device.c	3;"	f	line:3	signature:(uint t)
+Delay_uS	E:\ZYLJA-20140908(V1.0)\define.h	148;"	p	line:148	signature:(uchar)
+Delay_uS	E:\ZYLJA-20140908(V1.0)\device.c	11;"	f	line:11	signature:(uchar t)
+Delete_data	E:\ZYLJA-20140908(V1.0)\define.h	160;"	p	line:160	signature:(void)
+Delete_data	E:\ZYLJA-20140908(V1.0)\device.c	495;"	f	line:495	signature:(void)
+E2550addr	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270
+End_block	E:\ZYLJA-20140908(V1.0)\device.c	271;"	l	line:271
+Erase_DF321block	E:\ZYLJA-20140908(V1.0)\define.h	204;"	p	line:204	signature:(uint)
+Erase_DF321block	E:\ZYLJA-20140908(V1.0)\device.c	768;"	f	line:768	signature:(uint BlockAddr)
+Etabaddr	E:\ZYLJA-20140908(V1.0)\device.c	1025;"	l	line:1025
+Etabaddr	E:\ZYLJA-20140908(V1.0)\device.c	273;"	l	line:273
+Etabaddr	E:\ZYLJA-20140908(V1.0)\device.c	455;"	l	line:455
+Etabaddr	E:\ZYLJA-20140908(V1.0)\device.c	497;"	l	line:497
+Etabaddr	E:\ZYLJA-20140908(V1.0)\main.c	290;"	l	line:290
+F1CS0::{F1CS=0;Nop;Nop;}	E:\ZYLJA-20140908(V1.0)\define.h	71;"	d	line:71
+F1CS1::{Nop;Nop;F1CS=1;}	E:\ZYLJA-20140908(V1.0)\define.h	72;"	d	line:72
+F1CS::PORTBbits.RB2	E:\ZYLJA-20140908(V1.0)\define.h	69;"	d	line:69
+F1CS_TRIS::TRISBbits.TRISB2	E:\ZYLJA-20140908(V1.0)\define.h	70;"	d	line:70
+F2CS0::{F2CS=0;Nop;Nop;}	E:\ZYLJA-20140908(V1.0)\define.h	76;"	d	line:76
+F2CS1::{Nop;Nop;F2CS=1;}	E:\ZYLJA-20140908(V1.0)\define.h	77;"	d	line:77
+F2CS::PORTDbits.RD7	E:\ZYLJA-20140908(V1.0)\define.h	74;"	d	line:74
+F2CS_TRIS::TRISDbits.TRISD7	E:\ZYLJA-20140908(V1.0)\define.h	75;"	d	line:75
+Flashaddr	E:\ZYLJA-20140908(V1.0)\device.c	682;"	l	line:682
+Flashaddr	E:\ZYLJA-20140908(V1.0)\device.c	736;"	l	line:736
+Get_para	E:\ZYLJA-20140908(V1.0)\define.h	151;"	p	line:151	signature:(void)
+Get_para	E:\ZYLJA-20140908(V1.0)\device.c	268;"	f	line:268	signature:(void)
+Get_pgain	E:\ZYLJA-20140908(V1.0)\define.h	142;"	p	line:142	signature:(void)
+Get_pgain	E:\ZYLJA-20140908(V1.0)\main.c	145;"	f	line:145	signature:(void)
+Info_addr::0X1000	E:\ZYLJA-20140908(V1.0)\define.h	9;"	d	line:9
+Info_block::1	E:\ZYLJA-20140908(V1.0)\define.h	8;"	d	line:8
+Ini_port	E:\ZYLJA-20140908(V1.0)\define.h	143;"	p	line:143	signature:(void)
+Ini_port	E:\ZYLJA-20140908(V1.0)\main.c	88;"	f	line:88	signature:(void)
+Int_dealy	E:\ZYLJA-20140908(V1.0)\main.c	11;"	v	line:11
+Inter_loop	E:\ZYLJA-20140908(V1.0)\define.h	100;"	s	line:100
+Lch2	E:\ZYLJA-20140908(V1.0)\define.h	85;"	u	line:85
+Lch3	E:\ZYLJA-20140908(V1.0)\define.h	90;"	u	line:90
+Lch4	E:\ZYLJA-20140908(V1.0)\define.h	95;"	u	line:95
+Lch8	E:\ZYLJA-20140908(V1.0)\define.h	105;"	u	line:105
+Loop_addr::0X00	E:\ZYLJA-20140908(V1.0)\define.h	23;"	d	line:23
+Looppoint_addr::0XF4	E:\ZYLJA-20140908(V1.0)\define.h	29;"	d	line:29
+Mode	E:\ZYLJA-20140908(V1.0)\main.c	289;"	l	line:289
+N	E:\ZYLJA-20140908(V1.0)\device.c	49;"	l	line:49
+Nop	E:\ZYLJA-20140908(V1.0)\device.c	887;"	p	line:887	file:
+Nop	E:\ZYLJA-20140908(V1.0)\device.c	911;"	p	line:911	file:
+Open_avdd	E:\ZYLJA-20140908(V1.0)\main.c	119;"	f	line:119	signature:(void)
+Pgain	E:\ZYLJA-20140908(V1.0)\main.c	11;"	v	line:11
+Pgain_addr::0XF7	E:\ZYLJA-20140908(V1.0)\define.h	32;"	d	line:32
+Points_addr::0XF1	E:\ZYLJA-20140908(V1.0)\define.h	27;"	d	line:27
+PreAD7799_P1	E:\ZYLJA-20140908(V1.0)\define.h	179;"	p	line:179	signature:(void)
+PreAD7799_P1	E:\ZYLJA-20140908(V1.0)\device.c	883;"	f	line:883	signature:(void)
+PreAD7799_T1	E:\ZYLJA-20140908(V1.0)\define.h	180;"	p	line:180	signature:(void)
+PreAD7799_T1	E:\ZYLJA-20140908(V1.0)\device.c	907;"	f	line:907	signature:(void)
+R2550	E:\ZYLJA-20140908(V1.0)\define.h	170;"	p	line:170	signature:(uchar)
+R2550	E:\ZYLJA-20140908(V1.0)\device.c	808;"	f	line:808	signature:(uchar temp_addr)
+ROTATEBIT::12	E:\ZYLJA-20140908(V1.0)\define.h	19;"	d	line:19
+RX::PORTCbits.RC7	E:\ZYLJA-20140908(V1.0)\define.h	49;"	d	line:49
+RX_TMIE1_inter	E:\ZYLJA-20140908(V1.0)\main.c	16;"	p	line:16	file:	signature:(void)
+RX_TMIE1_inter	E:\ZYLJA-20140908(V1.0)\main.c	26;"	f	line:26	signature:(void)
+RX_TRIS::TRISCbits.TRISC7	E:\ZYLJA-20140908(V1.0)\define.h	46;"	d	line:46
+ReadAD7799_16P1	E:\ZYLJA-20140908(V1.0)\define.h	181;"	p	line:181	signature:(void)
+ReadAD7799_16P1	E:\ZYLJA-20140908(V1.0)\device.c	931;"	f	line:931	signature:(void)
+ReadAD7799_16P2	E:\ZYLJA-20140908(V1.0)\define.h	182;"	p	line:182	signature:(void)
+ReadAD7799_16T1	E:\ZYLJA-20140908(V1.0)\define.h	183;"	p	line:183	signature:(void)
+ReadAD7799_16T1	E:\ZYLJA-20140908(V1.0)\device.c	1007;"	p	line:1007	file:
+ReadAD7799_16T1	E:\ZYLJA-20140908(V1.0)\device.c	963;"	f	line:963	signature:(void)
+ReadAD7799_16T2	E:\ZYLJA-20140908(V1.0)\define.h	184;"	p	line:184	signature:(void)
+ReadAD7799_16T2	E:\ZYLJA-20140908(V1.0)\device.c	984;"	f	line:984	signature:(void)
+ReadAD7799_24P1	E:\ZYLJA-20140908(V1.0)\define.h	185;"	p	line:185	signature:(void)
+ReadAD7799_24T1	E:\ZYLJA-20140908(V1.0)\define.h	186;"	p	line:186	signature:(void)
+ReadAD_MODE0	E:\ZYLJA-20140908(V1.0)\define.h	187;"	p	line:187	signature:(void)
+ReadAD_MODE0	E:\ZYLJA-20140908(V1.0)\device.c	1003;"	f	line:1003	signature:(void)
+Read_DF321ID	E:\ZYLJA-20140908(V1.0)\define.h	202;"	p	line:202	signature:(uint,uchar *)
+Read_DF321ID	E:\ZYLJA-20140908(V1.0)\device.c	709;"	f	line:709	signature:(uint block, uchar *mBuf )
+Read_DF321page	E:\ZYLJA-20140908(V1.0)\define.h	201;"	p	line:201	signature:(uint,uint,uint,uchar *)
+Read_DF321page	E:\ZYLJA-20140908(V1.0)\device.c	680;"	f	line:680	signature:(uint block,uint excursion,uint mLen, uchar *mBuf )
+Read_status	E:\ZYLJA-20140908(V1.0)\define.h	198;"	p	line:198	signature:(uint)
+Read_status	E:\ZYLJA-20140908(V1.0)\device.c	639;"	f	line:639	signature:(uint block)
+RecAD7799	E:\ZYLJA-20140908(V1.0)\define.h	176;"	p	line:176	signature:(void)
+RecAD7799	E:\ZYLJA-20140908(V1.0)\device.c	838;"	f	line:838	signature:(void)
+Rinter	E:\ZYLJA-20140908(V1.0)\main.c	10;"	v	line:10
+Rx	E:\ZYLJA-20140908(V1.0)\define.h	150;"	p	line:150	signature:(void)
+Rx	E:\ZYLJA-20140908(V1.0)\device.c	25;"	f	line:25	signature:(void)
+Rx_Testinfo	E:\ZYLJA-20140908(V1.0)\define.h	157;"	p	line:157	signature:(void)
+Rx_Testinfo	E:\ZYLJA-20140908(V1.0)\device.c	579;"	f	line:579
+Rx_infpack	E:\ZYLJA-20140908(V1.0)\define.h	156;"	p	line:156	signature:(uint)
+Rx_infpack	E:\ZYLJA-20140908(V1.0)\device.c	121;"	f	line:121	signature:(uint temp_block)
+Rxpack	E:\ZYLJA-20140908(V1.0)\define.h	155;"	p	line:155	signature:(uint)
+Rxpack	E:\ZYLJA-20140908(V1.0)\device.c	142;"	f	line:142	signature:(uint temp_block)
+SCK::PORTBbits.RB4	E:\ZYLJA-20140908(V1.0)\define.h	63;"	d	line:63
+SCK_TRIS::TRISBbits.TRISB4	E:\ZYLJA-20140908(V1.0)\define.h	64;"	d	line:64
+SCLK::PORTDbits.RD4	E:\ZYLJA-20140908(V1.0)\define.h	52;"	d	line:52
+SCLK_TRIS::TRISDbits.TRISD4	E:\ZYLJA-20140908(V1.0)\define.h	53;"	d	line:53
+SHANG	E:\ZYLJA-20140908(V1.0)\main.c	500;"	l	line:500
+SHANG_temp	E:\ZYLJA-20140908(V1.0)\main.c	500;"	l	line:500
+SHDN::PORTEbits.RE1	E:\ZYLJA-20140908(V1.0)\define.h	44;"	d	line:44
+SHDN_TRIS::TRISEbits.TRISE1	E:\ZYLJA-20140908(V1.0)\define.h	45;"	d	line:45
+SI::PORTBbits.RB3	E:\ZYLJA-20140908(V1.0)\define.h	65;"	d	line:65
+SI_TRIS::TRISBbits.TRISB3	E:\ZYLJA-20140908(V1.0)\define.h	66;"	d	line:66
+SO::PORTBbits.RB1	E:\ZYLJA-20140908(V1.0)\define.h	67;"	d	line:67
+SO_TRIS::TRISBbits.TRISB1	E:\ZYLJA-20140908(V1.0)\define.h	68;"	d	line:68
+Sample_flag	E:\ZYLJA-20140908(V1.0)\main.c	499;"	l	line:499
+Sample_save	E:\ZYLJA-20140908(V1.0)\define.h	163;"	p	line:163	signature:(void)
+Sample_save	E:\ZYLJA-20140908(V1.0)\device.c	1021;"	f	line:1021	signature:(void)
+Send_IDinfo	E:\ZYLJA-20140908(V1.0)\define.h	162;"	p	line:162	signature:(void)
+Send_IDinfo	E:\ZYLJA-20140908(V1.0)\device.c	47;"	f	line:47
+Send_data	E:\ZYLJA-20140908(V1.0)\define.h	159;"	p	line:159	signature:(void)
+Send_data	E:\ZYLJA-20140908(V1.0)\device.c	452;"	f	line:452	signature:(void)
+Send_davrf	E:\ZYLJA-20140908(V1.0)\device.c	77;"	f	line:77	signature:(uchar N)
+Send_testinfo	E:\ZYLJA-20140908(V1.0)\define.h	161;"	p	line:161	signature:(void)
+Send_testinfo	E:\ZYLJA-20140908(V1.0)\device.c	564;"	f	line:564	signature:(void)
+Send_vrf	E:\ZYLJA-20140908(V1.0)\define.h	152;"	p	line:152	signature:(uchar)
+Send_vrf	E:\ZYLJA-20140908(V1.0)\device.c	33;"	f	line:33	signature:(uchar N)
+Single_point	E:\ZYLJA-20140908(V1.0)\define.h	158;"	p	line:158	signature:(void)
+Single_point	E:\ZYLJA-20140908(V1.0)\device.c	163;"	f	line:163	signature:(void)
+Sleep_forever	E:\ZYLJA-20140908(V1.0)\define.h	166;"	p	line:166	signature:(void)
+Sleep_forever	E:\ZYLJA-20140908(V1.0)\device.c	1161;"	f	line:1161	signature:(void)
+SpiDF321_InByte	E:\ZYLJA-20140908(V1.0)\define.h	195;"	p	line:195	signature:(void)
+SpiDF321_InByte	E:\ZYLJA-20140908(V1.0)\device.c	613;"	f	line:613	signature:(void)
+SpiDF321_OutByte	E:\ZYLJA-20140908(V1.0)\define.h	194;"	p	line:194	signature:(uchar)
+SpiDF321_OutByte	E:\ZYLJA-20140908(V1.0)\device.c	598;"	f	line:598	signature:(uchar b)
+T1H	E:\ZYLJA-20140908(V1.0)\main.c	499;"	l	line:499
+T1_flag	E:\ZYLJA-20140908(V1.0)\main.c	11;"	v	line:11
+TESTMODE_addr::0XF8	E:\ZYLJA-20140908(V1.0)\define.h	33;"	d	line:33
+TX_8M::OSCCONbits.IRCF0	E:\ZYLJA-20140908(V1.0)\define.h	50;"	d	line:50
+TX_TRIS::TRISCbits.TRISC6	E:\ZYLJA-20140908(V1.0)\define.h	47;"	d	line:47
+Test0_mode	E:\ZYLJA-20140908(V1.0)\define.h	139;"	p	line:139	signature:(void)
+Test0_mode	E:\ZYLJA-20140908(V1.0)\main.c	497;"	f	line:497	signature:(void)
+Test_mode	E:\ZYLJA-20140908(V1.0)\define.h	138;"	p	line:138	signature:(void)
+Test_mode	E:\ZYLJA-20140908(V1.0)\main.c	287;"	f	line:287	signature:(void)
+Testinfo	E:\ZYLJA-20140908(V1.0)\define.h	111;"	s	line:111
+Timetab_addr::0X2000	E:\ZYLJA-20140908(V1.0)\define.h	11;"	d	line:11
+Timetab_block::2	E:\ZYLJA-20140908(V1.0)\define.h	10;"	d	line:10
+Tx	E:\ZYLJA-20140908(V1.0)\define.h	149;"	p	line:149	signature:(uchar)
+Tx	E:\ZYLJA-20140908(V1.0)\device.c	19;"	f	line:19	signature:(uchar ch)
+Txblockpack	E:\ZYLJA-20140908(V1.0)\define.h	154;"	p	line:154	signature:(void)
+Txblockpack	E:\ZYLJA-20140908(V1.0)\device.c	104;"	f	line:104	signature:(void)
+Txpack	E:\ZYLJA-20140908(V1.0)\define.h	153;"	p	line:153	signature:(uint)
+Txpack	E:\ZYLJA-20140908(V1.0)\device.c	91;"	f	line:91	signature:(uint temp_block)
+Vbat1_addr::0X12	E:\ZYLJA-20140908(V1.0)\define.h	25;"	d	line:25
+Vbat_excursion	E:\ZYLJA-20140908(V1.0)\main.c	9;"	v	line:9
+Vbatpoint	E:\ZYLJA-20140908(V1.0)\device.c	274;"	l	line:274
+Vbattab_addr::0X4000	E:\ZYLJA-20140908(V1.0)\define.h	15;"	d	line:15
+Vbattab_block::4	E:\ZYLJA-20140908(V1.0)\define.h	14;"	d	line:14
+W2550	E:\ZYLJA-20140908(V1.0)\define.h	171;"	p	line:171	signature:(uchar,uchar)
+W2550	E:\ZYLJA-20140908(V1.0)\device.c	823;"	f	line:823	signature:(uchar temp_addr,uchar data)
+WW2550	E:\ZYLJA-20140908(V1.0)\define.h	172;"	p	line:172	signature:(uchar,uchar)
+WW2550	E:\ZYLJA-20140908(V1.0)\device.c	816;"	f	line:816	signature:(uchar temp_addr,uchar data)
+Well1_addr::0X10	E:\ZYLJA-20140908(V1.0)\define.h	24;"	d	line:24
+Well_addr::0XF0	E:\ZYLJA-20140908(V1.0)\define.h	26;"	d	line:26
+WriteAD7799	E:\ZYLJA-20140908(V1.0)\define.h	177;"	p	line:177	signature:(uchar)
+WriteAD7799	E:\ZYLJA-20140908(V1.0)\device.c	854;"	f	line:854	signature:(uchar b)
+Write_DF321page	E:\ZYLJA-20140908(V1.0)\define.h	203;"	p	line:203	signature:(uint,uint,uint, uchar *)
+Write_DF321page	E:\ZYLJA-20140908(V1.0)\device.c	733;"	f	line:733	signature:(uint block,uint excursion,uint mLen,uchar *mBuf)
+Write_EN	E:\ZYLJA-20140908(V1.0)\define.h	197;"	p	line:197	signature:(uint)
+Write_EN	E:\ZYLJA-20140908(V1.0)\device.c	628;"	f	line:628	signature:(uint block)
+Write_Flash_unpro	E:\ZYLJA-20140908(V1.0)\define.h	200;"	p	line:200	signature:(uint)
+Write_Flash_unpro	E:\ZYLJA-20140908(V1.0)\device.c	653;"	f	line:653	signature:(uint block)
+YU	E:\ZYLJA-20140908(V1.0)\main.c	499;"	l	line:499
+YULIU	E:\ZYLJA-20140908(V1.0)\define.h	125;"	m	line:125	struct:Testinfo
+YULIU_addr::0XFF	E:\ZYLJA-20140908(V1.0)\define.h	38;"	d	line:38
+adjzero	E:\ZYLJA-20140908(V1.0)\define.h	122;"	m	line:122	struct:Testinfo
+b	E:\ZYLJA-20140908(V1.0)\device.c	615;"	l	line:615
+b	E:\ZYLJA-20140908(V1.0)\device.c	641;"	l	line:641
+b	E:\ZYLJA-20140908(V1.0)\device.c	735;"	l	line:735
+b	E:\ZYLJA-20140908(V1.0)\device.c	770;"	l	line:770
+b	E:\ZYLJA-20140908(V1.0)\device.c	840;"	l	line:840
+big_block	E:\ZYLJA-20140908(V1.0)\device.c	271;"	l	line:271
+big_index	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270
+blo_num	E:\ZYLJA-20140908(V1.0)\device.c	500;"	l	line:500
+block	E:\ZYLJA-20140908(V1.0)\device.c	720;"	l	line:720
+blockaddr	E:\ZYLJA-20140908(V1.0)\device.c	499;"	l	line:499
+blockno	E:\ZYLJA-20140908(V1.0)\device.c	108;"	l	line:108
+blockno	E:\ZYLJA-20140908(V1.0)\device.c	50;"	l	line:50
+bn	E:\ZYLJA-20140908(V1.0)\device.c	1024;"	l	line:1024
+bn	E:\ZYLJA-20140908(V1.0)\device.c	274;"	l	line:274
+bn	E:\ZYLJA-20140908(V1.0)\device.c	454;"	l	line:454
+bn	E:\ZYLJA-20140908(V1.0)\device.c	498;"	l	line:498
+bn	E:\ZYLJA-20140908(V1.0)\main.c	291;"	l	line:291
+ch2	E:\ZYLJA-20140908(V1.0)\define.h	88;"	m	line:88	union:Lch2
+ch3	E:\ZYLJA-20140908(V1.0)\define.h	93;"	m	line:93	union:Lch3
+ch4	E:\ZYLJA-20140908(V1.0)\define.h	98;"	m	line:98	union:Lch4
+ch8	E:\ZYLJA-20140908(V1.0)\define.h	107;"	m	line:107	union:Lch8
+count	E:\ZYLJA-20140908(V1.0)\define.h	118;"	m	line:118	struct:Testinfo
+data	E:\ZYLJA-20140908(V1.0)\define.h	130;"	m	line:130	union:Allinfo
+data74	E:\ZYLJA-20140908(V1.0)\main.c	10;"	v	line:10
+err	E:\ZYLJA-20140908(V1.0)\device.c	497;"	l	line:497
+err_addr::0X0000	E:\ZYLJA-20140908(V1.0)\define.h	7;"	d	line:7
+err_block::0	E:\ZYLJA-20140908(V1.0)\define.h	6;"	d	line:6
+errnum	E:\ZYLJA-20140908(V1.0)\device.c	498;"	l	line:498
+go_on	E:\ZYLJA-20140908(V1.0)\main.c	499;"	l	line:499
+high_ISR	E:\ZYLJA-20140908(V1.0)\main.c	18;"	f	line:18	signature:(void)
+i	E:\ZYLJA-20140908(V1.0)\device.c	106;"	l	line:106
+i	E:\ZYLJA-20140908(V1.0)\device.c	123;"	l	line:123
+i	E:\ZYLJA-20140908(V1.0)\device.c	13;"	l	line:13
+i	E:\ZYLJA-20140908(V1.0)\device.c	144;"	l	line:144
+i	E:\ZYLJA-20140908(V1.0)\device.c	165;"	l	line:165
+i	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270
+i	E:\ZYLJA-20140908(V1.0)\device.c	35;"	l	line:35
+i	E:\ZYLJA-20140908(V1.0)\device.c	497;"	l	line:497
+i	E:\ZYLJA-20140908(V1.0)\device.c	49;"	l	line:49
+i	E:\ZYLJA-20140908(V1.0)\device.c	566;"	l	line:566
+i	E:\ZYLJA-20140908(V1.0)\device.c	581;"	l	line:581
+i	E:\ZYLJA-20140908(V1.0)\device.c	5;"	l	line:5
+i	E:\ZYLJA-20140908(V1.0)\device.c	600;"	l	line:600
+i	E:\ZYLJA-20140908(V1.0)\device.c	615;"	l	line:615
+i	E:\ZYLJA-20140908(V1.0)\device.c	711;"	l	line:711
+i	E:\ZYLJA-20140908(V1.0)\device.c	79;"	l	line:79
+i	E:\ZYLJA-20140908(V1.0)\device.c	840;"	l	line:840
+i	E:\ZYLJA-20140908(V1.0)\device.c	856;"	l	line:856
+i	E:\ZYLJA-20140908(V1.0)\device.c	93;"	l	line:93
+i	E:\ZYLJA-20140908(V1.0)\main.c	168;"	l	line:168
+i	E:\ZYLJA-20140908(V1.0)\main.c	289;"	l	line:289
+info	E:\ZYLJA-20140908(V1.0)\define.h	131;"	m	line:131	union:Allinfo
+interval	E:\ZYLJA-20140908(V1.0)\define.h	102;"	m	line:102	struct:Inter_loop
+j	E:\ZYLJA-20140908(V1.0)\device.c	107;"	l	line:107
+j	E:\ZYLJA-20140908(V1.0)\device.c	124;"	l	line:124
+j	E:\ZYLJA-20140908(V1.0)\device.c	145;"	l	line:145
+j	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270
+j	E:\ZYLJA-20140908(V1.0)\device.c	498;"	l	line:498
+j	E:\ZYLJA-20140908(V1.0)\device.c	582;"	l	line:582
+j	E:\ZYLJA-20140908(V1.0)\device.c	6;"	l	line:6
+j	E:\ZYLJA-20140908(V1.0)\device.c	840;"	l	line:840
+j	E:\ZYLJA-20140908(V1.0)\device.c	94;"	l	line:94
+j	E:\ZYLJA-20140908(V1.0)\main.c	291;"	l	line:291
+k	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270
+k	E:\ZYLJA-20140908(V1.0)\device.c	600;"	l	line:600
+k	E:\ZYLJA-20140908(V1.0)\device.c	615;"	l	line:615
+k	E:\ZYLJA-20140908(V1.0)\device.c	840;"	l	line:840
+k	E:\ZYLJA-20140908(V1.0)\device.c	856;"	l	line:856
+l	E:\ZYLJA-20140908(V1.0)\define.h	87;"	m	line:87	union:Lch2
+l	E:\ZYLJA-20140908(V1.0)\define.h	92;"	m	line:92	union:Lch3
+l	E:\ZYLJA-20140908(V1.0)\define.h	97;"	m	line:97	union:Lch4
+loop_point	E:\ZYLJA-20140908(V1.0)\define.h	116;"	m	line:116	struct:Testinfo
+looptime	E:\ZYLJA-20140908(V1.0)\define.h	103;"	m	line:103	struct:Inter_loop
+main	E:\ZYLJA-20140908(V1.0)\main.c	47;"	f	line:47	signature:(void)
+mem_num	E:\ZYLJA-20140908(V1.0)\define.h	121;"	m	line:121	struct:Testinfo
+memnum_addr::0XF9	E:\ZYLJA-20140908(V1.0)\define.h	34;"	d	line:34
+mm	E:\ZYLJA-20140908(V1.0)\main.c	289;"	l	line:289
+nn	E:\ZYLJA-20140908(V1.0)\device.c	1023;"	l	line:1023
+num	E:\ZYLJA-20140908(V1.0)\device.c	497;"	l	line:497
+p_gain	E:\ZYLJA-20140908(V1.0)\define.h	119;"	m	line:119	struct:Testinfo
+packnum	E:\ZYLJA-20140908(V1.0)\device.c	456;"	l	line:456
+para	E:\ZYLJA-20140908(V1.0)\main.c	7;"	v	line:7
+pnormal	E:\ZYLJA-20140908(V1.0)\main.c	293;"	l	line:293
+pnormal	E:\ZYLJA-20140908(V1.0)\main.c	501;"	l	line:501
+pointbyte	E:\ZYLJA-20140908(V1.0)\define.h	124;"	m	line:124	struct:Testinfo
+pointbyte_addr::0XFE	E:\ZYLJA-20140908(V1.0)\define.h	37;"	d	line:37
+points	E:\ZYLJA-20140908(V1.0)\define.h	115;"	m	line:115	struct:Testinfo
+resetAD7799	E:\ZYLJA-20140908(V1.0)\define.h	178;"	p	line:178	signature:(void)
+resetAD7799	E:\ZYLJA-20140908(V1.0)\device.c	870;"	f	line:870	signature:(void)
+t1normal	E:\ZYLJA-20140908(V1.0)\main.c	293;"	l	line:293
+tab	E:\ZYLJA-20140908(V1.0)\define.h	108;"	m	line:108	union:Lch8
+te_mode	E:\ZYLJA-20140908(V1.0)\define.h	120;"	m	line:120	struct:Testinfo
+temp	E:\ZYLJA-20140908(V1.0)\device.c	1023;"	l	line:1023
+temp	E:\ZYLJA-20140908(V1.0)\device.c	26;"	l	line:26
+temp	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270
+temp	E:\ZYLJA-20140908(V1.0)\device.c	454;"	l	line:454
+temp	E:\ZYLJA-20140908(V1.0)\device.c	566;"	l	line:566
+temp	E:\ZYLJA-20140908(V1.0)\device.c	655;"	l	line:655
+temp	E:\ZYLJA-20140908(V1.0)\device.c	809;"	l	line:809
+temp	E:\ZYLJA-20140908(V1.0)\main.c	289;"	l	line:289
+temp	E:\ZYLJA-20140908(V1.0)\main.c	499;"	l	line:499
+temp	E:\ZYLJA-20140908(V1.0)\main.c	49;"	l	line:49
+temp_addr	E:\ZYLJA-20140908(V1.0)\device.c	771;"	l	line:771
+temp_addr	E:\ZYLJA-20140908(V1.0)\device.c	778;"	l	line:778
+temp_block	E:\ZYLJA-20140908(V1.0)\device.c	107;"	l	line:107
+temp_value	E:\ZYLJA-20140908(V1.0)\device.c	1026;"	l	line:1026
+tempnum	E:\ZYLJA-20140908(V1.0)\device.c	771;"	l	line:771
+tempnum	E:\ZYLJA-20140908(V1.0)\device.c	783;"	l	line:783
+temppoint	E:\ZYLJA-20140908(V1.0)\device.c	272;"	l	line:272
+time	E:\ZYLJA-20140908(V1.0)\main.c	502;"	l	line:502
+time_value	E:\ZYLJA-20140908(V1.0)\device.c	1026;"	l	line:1026
+tnormal	E:\ZYLJA-20140908(V1.0)\main.c	293;"	l	line:293
+ts	E:\ZYLJA-20140908(V1.0)\device.c	1023;"	l	line:1023
+uchar::unsignedchar	E:\ZYLJA-20140908(V1.0)\define.h	81;"	d	line:81
+uint::unsignedint	E:\ZYLJA-20140908(V1.0)\define.h	82;"	d	line:82
+ulong::unsignedlong	E:\ZYLJA-20140908(V1.0)\define.h	84;"	d	line:84
+uslong::unsignedshortlong	E:\ZYLJA-20140908(V1.0)\define.h	83;"	d	line:83
+valid_block	E:\ZYLJA-20140908(V1.0)\main.c	8;"	v	line:8
+valid_excursion	E:\ZYLJA-20140908(V1.0)\main.c	9;"	v	line:9
+value	E:\ZYLJA-20140908(V1.0)\main.c	6;"	v	line:6
+well	E:\ZYLJA-20140908(V1.0)\define.h	114;"	m	line:114	struct:Testinfo
+well_info	E:\ZYLJA-20140908(V1.0)\define.h	113;"	m	line:113	struct:Testinfo
+yj	E:\ZYLJA-20140908(V1.0)\device.c	1024;"	l	line:1024
+yy	E:\ZYLJA-20140908(V1.0)\device.c	1023;"	l	line:1023
+yy	E:\ZYLJA-20140908(V1.0)\device.c	165;"	l	line:165
+yy	E:\ZYLJA-20140908(V1.0)\device.c	270;"	l	line:270

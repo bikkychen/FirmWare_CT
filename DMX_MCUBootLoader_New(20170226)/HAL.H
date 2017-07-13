@@ -1,0 +1,21 @@
+/* CH374芯片 硬件抽象层 V1.0 */
+/* 提供I/O接口子程序,提供寄存器级读写子程序 */
+
+#include <iom128v.h>
+#include "CH374INC.H" 
+
+#ifndef	__CH374_HAL_H__
+#define __CH374_HAL_H__  //防止一个头文件被重复包含
+
+typedef  unsigned char 		UINT8C;
+
+// 附加的USB操作状态定义
+#define  ERR_USB_UNKNOWN	 0xFA		// 未知错误,不应该发生的情况,需检查硬件或者程序错误
+
+UINT8 Read374Byte( UINT8 mAddr );	            // 从指定寄存器读取数据
+void Write374Byte( UINT8 mAddr, UINT8 mData );	// 向指定寄存器写入数据
+void Read374Block( UINT8 mAddr, UINT8 mLen, PUINT8 mBuf );   // 从指定起始地址读出数据块  
+void Write374Block( UINT8 mAddr, UINT8 mLen, PUINT8 mBuf );  // 向指定起始地址写入数据块 
+void Write374Block2( UINT8 mAddr, UINT8 mLen,const unsigned char  *mBuf ); 
+
+#endif

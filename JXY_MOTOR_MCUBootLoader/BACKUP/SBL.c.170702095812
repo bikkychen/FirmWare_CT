@@ -1,0 +1,341 @@
+#include <iom128v.h>								   	
+#include <macros.h>
+#include <stdio.h>
+
+ 
+
+//电机板引导程序
+
+#define  BB     0x00        //固件版本号
+
+ 
+
+ 
+
+#define INT_EN		{ SEI(); }
+#define INT_DIS		{ CLI(); }
+
+
+ 
+ 
+
+
+unsigned int  T_dat,R_dat;//曼码发送数据
+unsigned char T_com;//曼码发送命令
+unsigned char T_dat_buf[22];//曼码发送缓冲 
+unsigned char Int_count;
+unsigned char IntFlag;//接收帧状态
+ 
+unsigned int Tt;
+
+unsigned char UpdateBegin;//接收主程序数据开始标志
+unsigned int DataReCn;
+unsigned char crc16hi,crc16lo,DownloadSpeed;
+unsigned int Timer3Cn;
+unsigned char DSP_PageCn;//DSP程序页计数
+
+unsigned char Uart0RxCounter,Uart1RxCounter;
+unsigned char Uart0RxData[128],Uart1RxData[128];
+unsigned int Timer0Counter,Timer1Counter;
+unsigned char TimeOutFlag;
+
+char flash_buf[258]; //FALSH页缓冲区,M128的一个Flash页为256字节(128字) //暂只支持64K地址编程
+long address = 0; 
+unsigned int T2cn;
+
+void Start(void);
+
+ 
+ 
+void Delay30Ms(void);
+
+//void EEPROM_write(unsigned int Address,unsigned char Data);
+//unsigned char EEPROM_read(unsigned int Address) ;
+
+
+
+
+//擦除(code=0x03)和写入(code=0x05)一个Flash页 
+void boot_page_ew(long p_address,char code) 
+{ 
+    asm("mov r30,r16\n" 
+        "mov r31,r17\n" 
+        "out 0x3b,r18\n");            //将页地址放入Z寄存器和RAMPZ的Bit0中 
+    SPMCSR = code;                //寄存器SPMCSR中为操作码 
+    asm("spm\n");                    //对指定Flash页进行操作 
+}         
+//填充Flash缓冲页中的一个字 
+void boot_page_fill(unsigned int address,int data) 
+{ 
+    asm("mov r30,r16\n" 
+        "mov r31,r17\n"             //Z寄存器中为填冲页内地址 
+        "mov r0,r18\n" 
+        "mov r1,r19\n");            //R0R1中为一个指令字 
+    SPMCSR = 0x01; 
+    asm("spm\n"); 
+} 
+//等待一个Flash页的写完成 
+void wait_page_rw_ok(void) 
+{ 
+      while(SPMCSR & 0x40) 
+     { 
+         while(SPMCSR & 0x01); 
+         SPMCSR = 0x11; 
+         asm("spm\n"); 
+     } 
+} 
+//更新一个Flash页的完整处理 
+void write_one_page(void) 
+{ 
+    int i; 
+    boot_page_ew(address,0x03);                    //擦除一个Flash页 
+    
+    wait_page_rw_ok();                            //等待擦除完成 
+    for(i=0;i<256;i+=2)                //将数据填入Flash缓冲页中 
+    { 
+        boot_page_fill(i, flash_buf[i+2]+(flash_buf[i+3]<<8)); 
+    } 
+    boot_page_ew(address,0x05);                    //将缓冲页数据写入一个Flash页 
+   
+   
+    wait_page_rw_ok();                            //等待写入完成 
+}        
+
+
+ 
+//UART1 initialize
+// desired baud rate: 57600
+// actual: baud rate:58824 (2.1%)
+// char size: 8 bit
+// parity: Disabled
+void uart1_init(void)
+{
+ UCSR1B = 0x00; //disable while setting baud rate
+ UCSR1A = 0x02;
+ UCSR1C = 0x06;
+ UBRR1L = 0x10; //set baud rate lo 57600
+ UBRR1H = 0x00; //set baud rate hi
+ UCSR1B = 0x98;
+}
+
+#pragma interrupt_handler uart1_rx_isr:iv_USART1_RXC
+void uart1_rx_isr(void)//串口1接收中断
+{
+ R_dat=UDR1;//接收串口数据,同时清空串口接收中断标志
+ IntFlag=1;
+}
+
+ 
+
+void quit(void) 
+{
+    MCUCR = 0x01; 
+    MCUCR = 0x00;       //将中断向量表迁移到应用程序区头部 
+    RAMPZ = 0x00;       //RAMPZ清零初始化 
+    asm("jmp 0x0000\n");//跳转到Flash的0x0000处，执行用户的应用程序 
+} 
+
+void Start(void)
+{ 
+	uart1_init();
+	INT_EN
+}
+
+void crc16(unsigned char r_data[],unsigned int length)
+{
+        unsigned char cl,ch;
+        unsigned char savehi,savelo;
+        int ii,flag;
+        crc16hi=0xFF;
+        crc16lo=0xFF;
+        cl=0x1;
+        ch=0xA0;
+        for (ii=0;ii<length-2;ii++)
+        {
+            crc16lo=(crc16lo ^ r_data[ii]);
+                for (flag=0;flag<8;flag++)
+                {
+                       savehi=crc16hi;
+                        savelo=crc16lo;
+                       crc16hi=(crc16hi>>1);
+                       crc16lo=(crc16lo>>1);
+                        if ((savehi & 0x01)==0x01)
+                                crc16lo=(crc16lo | 0x80);
+                        if        ((savelo & 0x01)==0x01)
+                        {
+                                crc16hi = (crc16hi ^ ch);
+								crc16lo = (crc16lo ^ cl);
+                        }        
+                }
+        }
+}
+
+#pragma interrupt_handler timer3_ovf_isr:iv_TIM3_OVF
+void timer3_ovf_isr(void)
+{ 
+  UpdateBegin=0;//回到待命状态
+  TCCR3B = 0x00; //stop  
+  ETIMSK &= 0xfb;//关定时器3中断
+  ETIFR|=0x04; //清定时器3中断标志 
+}
+
+	
+
+
+void SendUart1(unsigned char c)   //串口发送数据
+{
+  while(!(UCSR1A&(1<<UDRE1)));   // 等待发送缓冲器为空
+  UDR1=c;   // 将数据放入缓冲器，发送数据                 
+}
+
+void SetTimer3(void)//页写开始后，如果有500ms时间内一个字节也没收到，则退出页写状态，回到待命状态
+{  
+    TCCR3B = 0x00; //stop    
+    TCNT3H = 0xF0; //8M,500ms
+    TCNT3L = 0xBE; //8M,500ms
+	ETIFR|=0x04; //清定时器3中断标志
+ 	TCCR3B = 0x05; //1024分频
+	ETIFR|=0x04; //清定时器3中断标志
+	ETIMSK |= 0x04; //开定时器3中断
+}
+
+void Init_Timer3(void)
+{
+	TCCR3B = 0x00; //stop    
+	TCNT3H = 0xd1; ////8M,1.5s
+    TCNT3L = 0x20; ////8M,1.5s
+	ETIFR|=0x04; //清定时器3中断标志
+	ETIMSK &= 0xfb;//关定时器3中断
+ 	TCCR3B = 0x05; //1024分频
+	ETIFR|=0x04; //清定时器3中断标志
+}
+
+void main(void)
+{
+ 	 unsigned int i,j,k;
+	 unsigned char t; 	
+     Delay30Ms();
+	 
+
+	 IntFlag=0;//无接收帧中断
+     UpdateBegin=0;//无标定系数下发
+	 T_dat=0;
+	 R_dat=0;
+	 DSP_PageCn=0;
+	 
+ 	 Start();
+	  
+	 Delay30Ms();
+
+	Init_Timer3();	
+	
+	     
+	UpdateBegin=0;
+	
+	while( ((ETIFR&0x04)==0x00) && (UpdateBegin==0) )
+	{
+		if((IntFlag==1))//3秒内收到开始更新命令
+		{  
+		    IntFlag=0;
+			if(R_dat==0xf5)//电机板握手
+			{
+			    UpdateBegin=1;
+				SendUart1(0xf5);  
+			} 	
+		}			
+	} 
+	
+	TCCR3B = 0x00; //stop    
+	ETIFR|=0x04; //清定时器3中断标志
+	ETIMSK &= 0xfb;//关定时器3中断
+	
+	if(UpdateBegin==0)//3秒内没收到开始更新命令，则直接跳到主程序
+	{
+	 quit();
+	}
+	
+	UpdateBegin=0;
+	
+	while(1)
+	{
+ 	if(IntFlag==1)//接收到了正常命令帧
+   	{
+	 	 if(UpdateBegin>0)//接收主程序二进制数据
+     	 { 	  
+		      SetTimer3();	 //每收到一字节就重新开始定时500ms，超时后回到待命状态
+			  					   
+		      flash_buf[DataReCn]=R_dat;
+			  DataReCn++;
+			   
+			  
+		 	 if(DataReCn==258)//2字节页索引，256字节页数据
+		   	 {
+			   TCCR3B = 0x00; //stop  
+  			   ETIMSK &= 0xfb;//关定时器3中断
+  			   ETIFR|=0x04; //清定时器3中断标志 
+  			   		   
+  			   if(UpdateBegin==1)//如果是主控板页写准备了，则此时写入一页
+				{
+                  address=flash_buf[0]*256+flash_buf[1];  
+			      address*=256;	 
+				  
+			      if(address<0)
+			          address=0;
+				 
+			     if(address>0xff00)//对应页索引为255，这是最后一页能写的页，目前限制固件大小为64K字节
+			         address=0xff00;
+				
+		          write_one_page();	//约20ms    
+			    }   
+				  
+			   UpdateBegin=0;//一页写完了，下一页又从页写准备开始
+			   //在此不用计算校验，主控板会去计算 
+			 }	 	 
+	     }
+  		 else//若不是下发标定系数，则进入以下各个命令的子语句
+		 {
+    		switch(R_dat)
+     		{			
+			   case 0xf5://电机板握手
+			         SendUart1(0xf5); 
+			   break;	   
+				
+				case 0xf4://电机板页写准备
+					 SendUart1(0xf4); 
+					 UpdateBegin=1;//页写准备 
+					 DataReCn=0;
+				     SetTimer3();
+				break;
+	
+				case 0xff://退出更新状态，运行正常程序
+				 SendUart1(0xff); 	
+				 quit();
+				break;
+
+				default:
+				break;
+	  	    }//switch(R_dat&0xf0)
+	     }//UpdateBegin
+		 IntFlag=0;
+	 }//IntFlag
+    }//while(1)
+ 
+}
+
+
+
+ 
+
+void Delay30Ms(void)//8M主时钟频率，则最大定时7812.5ms
+{
+	TCCR1B = 0x00; //stop
+    TCNT1 = 65301;//30ms  
+ 	TCCR1B = 0x05; //1024分频
+	TIFR|=0x04; //清定时器1中断标志
+	while((TIFR&0x04)==0x00); 
+	TCCR1B = 0x00; //stop
+	TIFR|=0x04; //清定时器1中断标志
+}
+
+
+

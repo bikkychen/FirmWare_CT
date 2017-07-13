@@ -1,0 +1,205 @@
+                        .module other.c
+                        .area text(rom, con, rel)
+ 0000                   .dbfile other.c
+ 0000           ; /*
+ 0000           ;  unsigned int ThisCurrent:10;
+ 0000           ;  unsigned int OtheRun:1;
+ 0000           ;  unsigned int OutofPhase:1;
+ 0000           ;  unsigned int UnderVoltage:1;
+ 0000           ;  unsigned int OverCurrent:1;
+ 0000           ;  unsigned int CommandStop:1;
+ 0000           ;  unsigned int ThisRun:1;
+ 0000           ;  */
+ 0000           ; 
+ 0000           ; 
+ 0000           ; /*
+ 0000           ; void init_USART1(void)  //USART0 初始化
+ 0000           ; {
+ 0000           ;       UCSR1B=0X00;
+ 0000           ;       UCSR1A=0X20;
+ 0000           ;       UCSR1C=0X06;
+ 0000           ;       UBRR1L=0X33;
+ 0000           ;       UBRR1H=0X00;
+ 0000           ;       UCSR1B=0X18;
+ 0000           ; }
+ 0000           ; 
+ 0000           ; void SendUart1(unsigned char c,unsigned int s)   //串口发送数据
+ 0000           ; {//要求流量板在s个8ms内通过串口返回数据
+ 0000           ; unsigned char t; 
+ 0000           ; 
+ 0000           ; for(t=0;t<200;t++)
+ 0000           ;   Uart1RxData[t]=0xff;
+ 0000           ; Uart1RxCounter=0; //清串口接受计数    
+ 0000           ; while(!(UCSR1A&(1<<UDRE1)));   // 等待发送缓冲器为空
+ 0000           ; UDR1=c;                      // 将数据放入缓冲器，发送数据
+ 0000           ; 
+ 0000           ; if(s>0)
+ 0000           ; {
+ 0000           ;  //超时设定
+ 0000           ; TimeOutFlag=0; //超时标志置0
+ 0000           ; Timer0Counter=s; //8ms定时循环次数
+ 0000           ; TCNT0=0x6;//定时8ms
+ 0000           ; TCCR0|=0x06;//256分频
+ 0000           ; TIFR|=0x01; //清定时器0中断标志
+ 0000           ; TIMSK|=0x01;//使能定时器0中断
+ 0000           ; t=UDR1;//开串口接收中断前读空缓存
+ 0000           ; UCSR1B|=0x80;//开串口接收中断
+ 0000           ; while(TimeOutFlag==0);
+ 0000           ; TIMSK&=0xFE;//关定时器0中断
+ 0000           ; UCSR1B&=0x7f;//关串口接收中断
+ 0000           ; }
+ 0000           ; }
+ 0000           ; */
+ 0000           ; /*
+ 0000           ; void sh_write(unsigned char value)
+ 0000           ; {
+ 0000           ;   unsigned char i;
+ 0000           ;   DDRD|=0x80;
+ 0000           ;   for (i=0x80;i>0;i/=2)
+ 0000           ;   {
+ 0000           ;   if(i & value)
+ 0000           ;     {
+ 0000           ;     SHSDA_H
+ 0000           ;     }
+ 0000           ;   else 
+ 0000           ;     {
+ 0000           ;     SHSDA_L
+ 0000           ;     }  
+ 0000           ;   SHSCL_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L  
+ 0000           ;   DELAY5
+ 0000           ;   }
+ 0000           ;   SHSDA_L
+ 0000           ;   SHSCL_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5   
+ 0000           ;   DDRD&=0x7F;
+ 0000           ;   PORTD|=0x80;
+ 0000           ; }
+ 0000           ; 
+ 0000           ; 
+ 0000           ; char sh_read(void)
+ 0000           ; {
+ 0000           ;   unsigned char i,val=0;
+ 0000           ;   DDRD&=0x7F;
+ 0000           ;   PORTD|=0x80;
+ 0000           ;   DELAY5  
+ 0000           ;   for (i=0x80;i>0;i/=2)
+ 0000           ;   {
+ 0000           ;   SHSCL_H
+ 0000           ;   DELAY5
+ 0000           ;   if ((PIND&0x80)==0x80)
+ 0000           ;   val=(val|i);
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5
+ 0000           ;   }
+ 0000           ;   DDRD|=0x80;
+ 0000           ;   SHSDA_L
+ 0000           ;   SHSCL_H  
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5
+ 0000           ;    
+ 0000           ;   DDRD&=0x7F;
+ 0000           ;   PORTD|=0x80;//内部上拉
+ 0000           ;   
+ 0000           ;   return val;  
+ 0000           ; }
+ 0000           ; 
+ 0000           ; 
+ 0000           ; void sh_start(void)
+ 0000           ; {
+ 0000           ;  DDRD|=0x80;
+ 0000           ;  
+ 0000           ;   SHSDA_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSDA_L
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSDA_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5  
+ 0000           ; }
+ 0000           ; 
+ 0000           ; void sh_reset(void)
+ 0000           ; {
+ 0000           ;   unsigned char i;
+ 0000           ;    DDRD|=0x80;
+ 0000           ;    
+ 0000           ;   SHSDA_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5
+ 0000           ;   for (i=0;i<9;i++)
+ 0000           ;   {
+ 0000           ;   SHSCL_H
+ 0000           ;   DELAY5
+ 0000           ;   SHSCL_L
+ 0000           ;   DELAY5
+ 0000           ;   }
+ 0000           ;   sh_start();
+ 0000           ; } 
+ 0000           ; */
+ 0000           ;  
+ 0000           ;  /*
+ 0000           ;  if( (ETIFR&0x04)==0x04 )//1s定时时间到
+ 0000           ;       { 
+ 0000           ;        if(IntFlag==0)
+ 0000           ;         {
+ 0000           ;          TCNT3=34286;//定时1s
+ 0000           ;        TCCR3B|=0x04;//256分频
+ 0000           ;          ETIFR|=0x04;//清定时器3中断标志
+ 0000           ;        
+ 0000           ;          if(Pumpflag==0)//读温度采湿度
+ 0000           ;         {
+ 0000           ;                  if(IntFlag==0)
+ 0000           ;                  {
+ 0000           ;                        pt=sh_read();
+ 0000           ;                pt<<=8; 
+ 0000           ;                pt|=sh_read();
+ 0000           ;                        Tem=pt;
+ 0000           ;     
+ 0000           ;                Pumpflag=1;
+ 0000           ;                        
+ 0000           ;                sh_reset();
+ 0000           ;                        sh_write(0x05);//湿度
+ 0000           ;                       }
+ 0000           ;           }
+ 0000           ;          else//读湿度采温度
+ 0000           ;           {
+ 0000           ;                  if(IntFlag==0)
+ 0000           ;                  {
+ 0000           ;                        pt=sh_read();
+ 0000           ;                pt<<=8; 
+ 0000           ;                pt|=sh_read();
+ 0000           ;                        Hum=pt;
+ 0000           ;                        
+ 0000           ;                Pumpflag=0;
+ 0000           ;                       
+ 0000           ;                       sh_reset();
+ 0000           ;                       sh_write(0x03);//湿度 
+ 0000           ;                  }   
+ 0000           ;          }
+ 0000           ;         }
+ 0000           ;       }
+ 0000           ;  */
+ 0000           ;  
+ 0000           ;  /*
+ 0000           ;  void watchdog_init(void)
+ 0000           ; {
+ 0000           ;     WDR(); //this prevents a timout on enabling
+ 0000           ;     WDTCR |= (1<<WDCE) | (1<<WDE);
+ 0000           ;     WDTCR = 0x08; //WATCHDOG ENABLED - dont forget to issue WDRs
+ 0000           ; }*/
+ 0000           ; 
+ 0000           ;  

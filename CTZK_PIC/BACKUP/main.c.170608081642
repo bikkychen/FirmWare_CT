@@ -1,0 +1,2007 @@
+ /**************************************************
+CTZK
+//20161110 增加了全部采样的CRC16校验
+//20161113 改进了流量数据中时间和相位由无符号短整型转为浮点数时的转换方法，以防上位机软件出现相位超大值
+//20161224 将电机断流判断值由26mA改为13mA，因为目前调节电机工作时空载电流值仅为23~28mA，升级版本为V4.0
+//20161229 修改收张电机的本电机同向和反向判断，修改调节电机的电机方向控制（与原来相反）
+//20170308 流量采样增加校验帧，升级版本为V4.2
+//20170607 电机断路电流由原来的13mA改为26mA 升级版本为V4.3
+**************************************************/
+#include <iom128v.h>								   	
+#include <macros.h>
+#include <stdio.h>
+
+#define  BB     0x43        //固件版本号
+
+#define M1_L    PORTD&=0xfb;
+#define M1_H    PORTD|=0x04;
+#define M2_L    PORTD&=0xfd;
+#define M2_H    PORTD|=0x02;
+
+ 
+//收放电机管脚定义和控制项
+#define DIR1_PIN    ((PINA&0x04)>>2)
+#define PWM1_PIN    ((PINA&0x02)>>1)
+#define BREAKE1_PIN (PINA&0x01)
+
+#define DIR1_H      {DDRA|=0x04;PORTA|=0x04;}
+#define PWM1_H      {DDRA|=0x02;PORTA|=0x02;}
+#define BREAKE1_H   {DDRA|=0x01;PORTA|=0x01;}
+
+#define DIR1_L      {DDRA|=0x04;PORTA&=0xfb;}
+#define PWM1_L      {DDRA|=0x02;PORTA&=0xFD;}
+#define BREAKE1_L   {DDRA|=0x01;PORTA&=0xFE;}
+
+//调节电机管脚定义和控制项
+#define PWM2_PIN    ((PINF&0x04)>>2)
+#define BREAKE2_PIN ((PINF&0x02)>>1)
+#define DIR2_PIN    (PINF&0x01)
+
+#define PWM2_H      {DDRF|=0x04;PORTF|=0x04;}
+#define BREAKE2_H   {DDRF|=0x02;PORTF|=0x02;}
+#define DIR2_H      {DDRF|=0x01;PORTF|=0x01;}
+
+#define PWM2_L      {DDRF|=0x04;PORTF&=0xfb;}
+#define BREAKE2_L   {DDRF|=0x02;PORTF&=0xFD;}
+#define DIR2_L      {DDRF|=0x01;PORTF&=0xFE;}
+
+//电机电源
+#define VM_H        {DDRB|=0x80;PORTB|=0x80;}
+
+//同时关二个电机，先把PWM置低，后把DIR和BREAK置低，最后关电机电源
+//最好不关刹车，这样电机堵转停止后不会有1.6秒的反向电压，电机不会喘气
+#define MOTORSTOP   {DDRA|=0x07;PORTA&=0xFD;PORTA&=0xF8;   DDRF|=0x07;PORTF&=0xFB;PORTF&=0xF8;     DDRB|=0x80;PORTB&=0x7f;}
+
+#define DELAY10 for(Tt=0;Tt<4;Tt++);
+#define DELAY20 for(Tt=0;Tt<4;Tt++);
+#define DELAY40 for(Tt=0;Tt<16;Tt++); 
+#define DELAY50 for(Tt=0;Tt<21;Tt++); 
+#define DELAY80 for(Tt=0;Tt<32;Tt++); 
+#define DELAY89 for(Tt=0;Tt<36;Tt++); 
+#define DELAY100 for(Tt=0;Tt<42;Tt++); 
+#define DELAY170 for(Tt=0;Tt<72;Tt++);
+#define DELAY268 for(Tt=0;Tt<113;Tt++);
+#define DELAY397 for(Tt=0;Tt<165;Tt++);
+#define DELAY400 for(Tt=0;Tt<168;Tt++);
+
+union FIB
+{
+ float f;
+ unsigned int i[2];
+ unsigned char b[4];
+}myFIB;
+
+union MotorStatus
+{
+ unsigned int i;
+ struct 
+ { 
+   unsigned int PWM:1;//bit0,电机运行状态，0：停止，1：运行
+   unsigned int DIR:1;//bit1,电机运行方向，0：反转,收臂-调大(DIR_L)，1：正转,张臂-调小(DIR_H)
+   unsigned int BrokenStop:1;//bit2, 断路停
+   unsigned int CommandStop:1;//bit3,手动停
+   unsigned int OverCurrent:1;//bit4,过流停
+   unsigned int UnderVoltage:1;//bit5,欠压停
+   unsigned int StartResult:2;//bit6-bit7,电机最近一次启动结果(0：正常上电启动，1：本电机同向运行，2：本电机反向运行，3：另一个电机正在运行)
+   
+   unsigned int ThisCurrent:8;//bit8-bit15 ,  电机当前或停止前最近一次电流
+ }s;
+}Motor1Status,Motor2Status;//电机状态
+
+unsigned char Motor1Thr,Motor2Thr;//电机堵转过流阈值
+
+unsigned char T_Flag;
+
+unsigned int Timer0Counter;//定时器0超过4ms时的计数
+
+unsigned char Uart0RxData[74];//串口接收数据缓存
+unsigned char Uart0RxCounter;
+
+unsigned char Rx[18];//解码接收9位共18个半位
+int  T_dat,R_dat;//曼码发送数据
+unsigned char T_com;//曼码发送命令
+
+unsigned char TimeOutFlag;//发送超时标志
+
+unsigned char T_dat_buf[22];//曼码发送缓冲 
+
+unsigned int DataFlag;//下发标定系数开始标志
+unsigned char Int_count;
+unsigned char IntFlag;//接收帧状态
+
+unsigned int Tt,k;
+unsigned int T2cn;
+unsigned char coeffdata[320];
+
+unsigned char Uart0TxData[74];//串口发送数据缓存
+
+unsigned char EEPAdd;//接收系数存放地址索引
+unsigned int coeff_len,coeff_count;//接收系数长度，接收系数计数
+unsigned int CompCounter;
+
+unsigned int bf;
+
+unsigned long lfib;//短整型转浮点数时用的临时变量
+unsigned char crc16hi,crc16lo,crc16array[16];
+
+void InitialIO(void);
+void init_USART0(void);
+void SendUart0_2(unsigned char len,unsigned int s);
+void SendUart0_3(unsigned char len,unsigned int s,unsigned char cn);
+void Pwm_startup(unsigned char motor);
+void Start(void);
+void SendManchester(void); 
+unsigned char SampleADC(unsigned char ch);
+void EEPROM_write(unsigned int Address,unsigned char Data);
+unsigned char EEPROM_read(unsigned int Address);
+void CheckMotor(unsigned int t);
+void crc16(unsigned char r_data[],unsigned int length);
+
+void InitialIO(void)
+{//1输出，0输入
+ PORTA=0x00;
+ DDRA=0x07; //PA0=BREAKE1 PA1=PWM1 PA2=DIR1
+
+ PORTB=0x00; 
+ DDRB=0x80; //PB7=VM_CTRL
+ 
+ PORTC=0x00;
+ DDRC=0x00; 
+ 
+ PORTD=0x00; 
+ DDRD=0x06;//PD1=M2 PD2=M1
+ 
+ PORTE=0x00; 
+ DDRE=0x00;
+ 
+ PORTF=0x00; 
+ DDRF=0x07;//PF0=DIR2 PF1=BREAKE2 PF2=PWM2
+ 
+ PORTG=0x00; 
+ DDRG=0x00; 
+}
+
+//UART0 initialize
+// desired baud rate: 57600
+// actual: baud rate:58824 (2.1%)
+// char size: 8 bit
+// parity: Disabled
+void uart0_init(void)
+{
+ UCSR0B = 0x00; //disable while setting baud rate
+ UCSR0A = 0x02;
+ UCSR0C = 0x06;
+ UBRR0L = 0x10; //set baud rate lo 57600
+ UBRR0H = 0x00; //set baud rate hi
+ UCSR0B = 0x98;
+}
+
+#pragma interrupt_handler uart0_rx_isr:iv_USART0_RXC
+void uart0_rx_isr(void)
+{
+ //uart has received a character in UDR
+}
+
+#pragma interrupt_handler timer0_ovf_isr:iv_TIM0_OVF
+void timer0_ovf_isr(void)
+{
+Timer0Counter--;
+if(Timer0Counter==0)
+{
+ TCNT0=0;
+ TimeOutFlag=1;
+ TIMSK&=0xFE;//关定时器0中断
+ UCSR0B&=0x7f;//关串口接收中断
+ }
+ else
+ {
+ TCNT0=0x06;//定时8ms
+ }
+}
+
+void SendUart0_2(unsigned char len,unsigned int s)   //串口发送数据
+{//要求流量板在s个8ms内通过串口返回数据
+unsigned char t,i; 	
+
+for(t=0;t<74;t++)
+  Uart0RxData[t]=0xff;
+  
+Uart0RxCounter=0; //清串口接受计数  
+
+for(t=0;t<len;t++)
+{
+while(!(UCSR0A&(1<<UDRE0)));   // 等待发送缓冲器为空
+for(i=0;i<200;i++);
+UDR0=Uart0TxData[t];  
+}
+                  
+if(s>0)
+{
+ //超时设定
+TimeOutFlag=0; //超时标志置0
+Timer0Counter=s; //8ms定时循环次数
+TCNT0=0x06;//定时8ms
+TCCR0|=0x06;//256分频
+TIFR|=0x01; //清定时器0中断标志
+TIMSK|=0x01;//使能定时器0中断
+t=UDR0;//开串口接收中断前读空缓存
+UCSR0B|=0x80;//开串口接收中断
+while(TimeOutFlag==0)
+{
+CheckMotor(0);
+}
+TIMSK&=0xFE;//关定时器0中断
+UCSR0B&=0x7f;//关串口接收中断
+}
+}
+
+void SendUart0_3(unsigned char len,unsigned int s,unsigned char cn)   //串口发送数据，不死等，收到采集板返回的cn个字节后即退出，如一直没收到cn个字节，则超时时间s*8ms到后也退出
+{//要求流量板在s个8ms内通过串口返回数据
+unsigned char t,i; 	
+
+for(t=0;t<74;t++)
+  Uart0RxData[t]=0xff;
+  
+Uart0RxCounter=0; //清串口接受计数  
+
+for(t=0;t<len;t++)
+{
+while(!(UCSR0A&(1<<UDRE0)));   // 等待发送缓冲器为空
+for(i=0;i<200;i++);
+UDR0=Uart0TxData[t];  
+}
+                  
+if(s>0)
+{
+ //超时设定
+TimeOutFlag=0; //超时标志置0
+Timer0Counter=s; //8ms定时循环次数
+TCNT0=0x06;//定时8ms
+TCCR0|=0x06;//256分频
+TIFR|=0x01; //清定时器0中断标志
+TIMSK|=0x01;//使能定时器0中断
+t=UDR0;//开串口接收中断前读空缓存
+UCSR0B|=0x80;//开串口接收中断
+while(TimeOutFlag==0)
+{
+CheckMotor(0);
+ if(Uart0RxCounter>=cn)
+   break;
+}
+TIMSK&=0xFE;//关定时器0中断
+UCSR0B&=0x7f;//关串口接收中断
+}
+}
+
+
+void Pwm_startup(unsigned char motor)//电机软启动
+{	unsigned char c,b;
+
+	if(motor==1)
+	{         
+	     for(b=0;b<30;b++)//6ms采用降低占空比启动电机
+		 {
+		  PWM1_H
+		  DELAY100
+		  PWM1_L
+		  DELAY100
+		 }
+ 
+    	 for(c=0;c<200;c++)//150ms采用降低占空比启动电机
+		 {
+	       PWM1_L
+		   for(b=0;b<(200-c);b++)
+		    {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+			
+	       if(Motor1Status.s.UnderVoltage==0)//如意启动过程中没有发生欠压，则继续启动
+		   {PWM1_H}
+		   else 
+		   {PWM1_L}
+		   
+	       for(b=0;b<(c+50);b++)
+		   {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+		 }	
+	} 
+	else if(motor==2)
+	{  
+	     for(b=0;b<30;b++)//6ms采用降低占空比启动电机
+		 {
+		  PWM2_H
+		  DELAY100
+		  PWM2_L
+		  DELAY100
+		 }
+ 
+    	 for(c=0;c<200;c++)//150ms采用降低占空比启动电机
+		 {
+	       PWM2_L
+		   for(b=0;b<(200-c);b++)
+		    {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+			
+	       if(Motor2Status.s.UnderVoltage==0)//如意启动过程中没有发生欠压，则继续启动
+		   {PWM2_H}
+		   else 
+		   {PWM2_L}
+		   
+	       for(b=0;b<(c+50);b++)
+		   {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+		 }	
+	}
+}
+
+   
+unsigned char SampleADC(unsigned char ch)//耗时约5ms
+{     unsigned char c;
+      unsigned long adcl;
+	  unsigned int ADdata;
+
+	  ADMUX  = ch;//片外基准，选择单端输入通道 
+	  ADCSRA =0xC3;//ADC使能，ADC开始转换，ADC自动触发使能（连续转换模式），8分频 
+   
+	  //第一次采样值不要
+	  for(ADdata=0;ADdata<100;ADdata++);
+	  while((ADCSRA&0x40)==0x40);//等待转换完成
+	  ADdata=ADCL;
+	  ADdata=ADCH;  
+  
+	  adcl=0;
+	  for(c=0;c<32;c++)//32次值取平均
+	  {
+	   ADCSRA = 0xC3;//ADC使能，ADC开始转换，ADC自动触发使能（连续转换模式），8分频 
+	   for(ADdata=0;ADdata<100;ADdata++);
+	   while((ADCSRA&0x40)==0x40);//等待转换完成	
+	   ADdata=ADCL;   
+	   ADdata|=(ADCH<<8);
+	   ADdata&=0x03ff;//10位有效转换结果
+	   adcl+=ADdata;
+	  }
+
+	  adcl>>=7;//除以32，再除以4，相当于8位AD
+	  return (adcl&0x000000ff);//取8位有效位
+}
+
+void CheckMotor(unsigned int t)//电机不转时耗时5us，最大定时8388ms
+{   
+    float f;
+    unsigned int n;
+    TCCR1B = 0x00; //stop
+	if(t>8388)
+	   t=8388;
+	f=t;
+	f*=7.8125;
+	n=f;
+    TCNT1 = 65536-n;   
+ 	TCCR1B = 0x05; //1024分频
+	TIFR|=0x04; //清定时器1中断标志
+	while((TIFR&0x04)==0x00) 
+   {
+   if(PWM1_PIN==1)//电机运行时才实时检测电流，否则电流保存最后一次的测试值
+   {
+    Motor1Status.s.ThisCurrent=SampleADC(7);
+    if(Motor1Status.s.ThisCurrent>Motor1Thr)//过流关电机
+    {
+	 MOTORSTOP//关电机
+     Motor1Status.s.OverCurrent=1;//过流状态置1，表示电机上次停止原因为过流停
+	}
+	//else if(Motor1Status.s.ThisCurrent<10)//断路关电机，电流小于13mA认为是断路
+	else if(Motor1Status.s.ThisCurrent<20)//断路关电机，电流小于26mA认为是断路
+	{
+	 MOTORSTOP//关电机
+     Motor1Status.s.BrokenStop=1;//断路状态置1，表示电机上次停止原因为断路停
+	}
+   }
+    Motor1Status.s.PWM=PWM1_PIN; 
+	Motor1Status.s.DIR=DIR1_PIN;
+	 
+		  	   
+   if(PWM2_PIN==1)//电机运行时才实时检测电流，否则电流保存最后一次的测试值
+   {
+	Motor2Status.s.ThisCurrent=SampleADC(6);
+    if(Motor2Status.s.ThisCurrent>Motor2Thr)//过流关电机
+    {
+	 MOTORSTOP//关电机
+     Motor2Status.s.OverCurrent=1;//过流状态置1，表示电机上次停止原因为过流停
+	} 
+	//else if(Motor2Status.s.ThisCurrent<10) //断路关电机，电流小于13mA认为是断路
+	else if(Motor2Status.s.ThisCurrent<20) //断路关电机，电流小于26mA认为是断路
+	{
+	 MOTORSTOP//关电机
+     Motor2Status.s.BrokenStop=1;//断路状态置1，表示电机上次停止原因为断路停
+	}
+   }
+   Motor2Status.s.PWM=PWM2_PIN; 
+   Motor2Status.s.DIR=DIR2_PIN;  
+   if(t==0){break;}//不定时则检测一次电机状态后直接跳出
+   } 
+   TCCR1B = 0x00; //stop
+}
+
+
+void Start(void)
+{
+ InitialIO();
+ uart0_init();
+ 
+ MOTORSTOP//关电机
+ BREAKE1_L//放开刹车
+ BREAKE2_L//放开刹车
+ 
+ Motor1Status.s.PWM=PWM1_PIN; 
+ Motor1Status.s.DIR=DIR1_PIN;
+ Motor1Status.s.BrokenStop=0;
+ Motor1Status.s.CommandStop=0;
+ Motor1Status.s.OverCurrent=0;
+ Motor1Status.s.UnderVoltage=0;
+ Motor1Status.s.StartResult=0;
+ Motor1Status.s.ThisCurrent=0;
+ 
+ Motor2Status.s.PWM=PWM2_PIN; 
+ Motor2Status.s.DIR=DIR2_PIN;
+ Motor2Status.s.BrokenStop=0;
+ Motor2Status.s.CommandStop=0;
+ Motor2Status.s.OverCurrent=0;
+ Motor2Status.s.UnderVoltage=0;
+ Motor2Status.s.StartResult=0;
+ Motor2Status.s.ThisCurrent=0;
+ 
+ IntFlag=0;//无接收帧中断
+ DataFlag=0;//无标定系数下发 
+ coeff_len=0;
+ coeff_count=0;//标定系数计数
+ 
+ ACSR|=0x10;//清模拟比较器中断标志
+ ACSR=0x03;//开模拟比较器    
+ ACSR|=0x08;//开模拟比较器中断，任何时候都要进行欠压监测	
+ ACSR|=0x10;//清模拟比较器中断标志	
+	
+
+ EIFR|=0x08;//清INT3中断标志,每位控制一个中断，可控制8个中断
+ EICRA|=0xc0; //INT3上升沿触发 ，每2位控制一个中断，共4个中断，0-低电平触发，1-保留，2-下降沿触发，3-上升沿触发
+ EIMSK|=0x08;//使能INT3中断 ,每位控制一个中断，可控制8个中断
+ 
+ SREG=0x80;//总中断使能
+ 
+ M1_H
+ CheckMotor(50);
+ M1_L
+ 
+}
+
+void main(void)
+{ 
+  unsigned char i;
+  unsigned int add,at,mk,pt;
+  unsigned long l;
+  unsigned int TestDataBlockIndex,TestDataBlockCount;
+ 
+  Start();
+  
+  CheckMotor(50); 
+  
+  Motor1Thr=EEPROM_read(0);
+  Motor2Thr=EEPROM_read(1);
+  if(Motor1Thr<77) {Motor1Thr=77;}//堵转电流最小为100mA
+  if(Motor1Thr>154) {Motor1Thr=154;}//堵转电流最大为200mA
+  if(Motor2Thr<77) {Motor2Thr=77;}//堵转电流最小为100mA
+  if(Motor2Thr>154) {Motor2Thr=154;}//堵转电流最大为200mA
+ 
+  //采集总线电压，判断是否进入存储状态  
+  if(SampleADC(5)<45)//Cable端的电压低于30V 
+	{	  UCSR0B = 0x00;
+	      PORTE&=0xFD;
+		  DDRE|=0x02;
+		  PORTE&=0xFD;	 
+		  while(1); 
+	}
+	     
+while(1)//若Cable端为高电压，则进入正常的通讯状态
+{ 
+   CheckMotor(0);//实时进行电机过流检测
+
+   if(IntFlag==2)//校验位错误，不上传任何响应，上位机按超时处理
+   { 
+	IntFlag=0;//无命令帧
+	EIFR|=0x08;//清INT3中断标志
+    EIMSK|=0x08;//使能INT3中断	 
+   }
+   else if(IntFlag==1)//接收到了正常命令帧
+   {
+	if(DataFlag)
+     { 		  
+	  coeffdata[coeff_count]=R_dat;
+	  coeff_count++;	  
+ 
+	  if(coeff_count==coeff_len)
+	  {
+		if(DataFlag==1)//下发压力温度系数
+   	    {
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x88;
+		 Uart0TxData[3]=0;//压力温度系数包0
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x88))
+		 {T_dat&=0xff00; }
+		 else
+		 {T_dat=0x00aa; }
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x88;
+		 Uart0TxData[3]=1;//压力温度系数包1
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k+64];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x88))
+		 {T_dat&=0x00ff; }
+		 else
+		 {T_dat|=0x5500; }
+		 
+		 DataFlag=0;
+		 coeff_len=0;	
+		 T_com=0x0A;
+		 SendManchester();		
+		}
+		else if(DataFlag==2)//下发流量系数
+		{
+		  Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x88;
+		 Uart0TxData[3]=2;//流量系数包2
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x88))
+		 {T_dat&=0xff00; }
+		 else
+		 {T_dat=0x00aa; }
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x88;
+		 Uart0TxData[3]=3;//流量系数包3
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k+64];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x88))
+		 {T_dat&=0x00ff; }
+		 else
+		 {T_dat|=0x5500; }
+		 
+		 DataFlag=0;
+		 coeff_len=0;	
+		 T_com=0x0B;
+		 SendManchester();		
+		}	
+		else if(DataFlag==3)//提取测试数据
+		{
+		 DataFlag=0;
+		 coeff_len=0;	
+		 T_com=0x09;
+		 TestDataBlockIndex=coeffdata[1];
+		 TestDataBlockIndex<<=8;
+		 TestDataBlockIndex|=coeffdata[0];//首块地址/索引
+		 TestDataBlockCount=coeffdata[3];
+		 TestDataBlockCount<<=8;
+		 TestDataBlockCount|=coeffdata[2];//需提取的总包数，每包64字节，每块4096字节共64包
+		 
+		 for(k=0;k<TestDataBlockCount;k++)//按用户要求分包进行上传，每包64字节传32帧
+		 {
+		   Uart0TxData[0]=0xE8;
+		   Uart0TxData[1]=0x40;
+		   Uart0TxData[2]=0x9A;//读测试数据
+		   Uart0TxData[3]=8;
+		   
+		   //统一块索引
+		   Uart0TxData[4]=(k); 	
+		   Uart0TxData[5]=(k>>8); 	//包索引	
+		   Uart0TxData[6]=(TestDataBlockIndex);
+		   Uart0TxData[7]=(TestDataBlockIndex>>8);//首块索引
+		   
+		   /*
+		   // 单独块索引
+		   Uart0TxData[4]=(k%8); 	
+		   Uart0TxData[5]=0; 	//包索引	
+		   Uart0TxData[6]=(TestDataBlockIndex+k/8);
+		   Uart0TxData[7]=((TestDataBlockIndex+k/8)>>8);//首块索引
+		   */
+		   
+		   SendUart0_2(9,6);//超时48ms
+		   for(bf=0;bf<32;bf++)
+		   {	   	
+		 	T_dat=Uart0RxData[bf*2+1];//高字节
+		 	T_dat<<=8;
+		 	T_dat|=Uart0RxData[bf*2+0];//低字节
+		 	SendManchester();	
+			CheckMotor(10);	 
+		   }		
+		  }
+		} 
+		else if(DataFlag==4)//下发仪器信息
+		{
+		T_dat=0x0000;
+		
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x84;
+		 Uart0TxData[3]=0;//包0
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if(!((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x84)))
+		 {T_dat|=0x0001; }
+ 		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x84;
+		 Uart0TxData[3]=1;//包1
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k+64];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if(!((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x84)))
+         {T_dat|=0x0002; }
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x84;
+		 Uart0TxData[3]=2;//包2
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k+128];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if(!((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x84)))
+         {T_dat|=0x0004; }
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x84;
+		 Uart0TxData[3]=3;//包3
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k+192];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if(!((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x84)))
+         {T_dat|=0x0008; }
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x84;
+		 Uart0TxData[3]=4;//包4
+		 Uart0TxData[4]=0x21;
+		 Uart0TxData[5]=0x22;
+		 Uart0TxData[6]=0x23;
+		 Uart0TxData[7]=0x24;
+		 Uart0TxData[8]=0x32;	 
+		 for(k=0;k<64;k++)
+		 {
+		 Uart0TxData[9+k]=coeffdata[k+256];  
+		 }		 
+		 SendUart0_2(74,20);//超时160ms
+		 if(!((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x84)))
+         {T_dat|=0x0010; }
+		 
+		 DataFlag=0;
+		 coeff_len=0;	
+		 T_com=0x0C;
+		 SendManchester();		
+		}     
+	  }	 
+	}
+	 
+   else//若不是下发标定系数，则进入以下各个命令的子语句
+	{ 
+	T_com=(R_dat>>4);
+    switch(R_dat&0xf0)
+     { 
+	  case 0x10://复位 	
+		Uart0TxData[0]=0xE8;
+		Uart0TxData[1]=0x40;
+		Uart0TxData[2]=0x8D;//流量板握手，超时40ms
+		Uart0TxData[3]=31;
+		SendUart0_2(9,5); 
+		if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x8D))
+		 {T_dat=0x00;}
+		else
+		 {T_dat=0xff;}
+		T_dat<<=8;
+		T_dat|=0x00;
+		SendManchester();	
+	  break;
+	  
+	  case 0x20://读版本号
+		Uart0TxData[0]=0xE8;
+		Uart0TxData[1]=0x40;
+		Uart0TxData[2]=0x8D;//流量板握手，超时40ms
+		Uart0TxData[3]=31;
+		SendUart0_2(9,5); 
+		if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x8D))
+		 {T_dat=Uart0RxData[3];}
+		else
+		 {T_dat=0xff;}    
+		T_dat<<=8;
+		T_dat|=BB;
+		SendManchester();	
+	  break;
+	  
+	  case 0x30://Cable电压,VIN/VR电压
+	   CheckMotor(30);   
+	   T_dat=SampleADC(5); //Cable 
+	   CheckMotor(30);
+	   T_dat<<=8;
+	   T_dat|=SampleADC(4); //VIN / VR 
+	   CheckMotor(30);
+	   SendManchester();   
+	  break;
+	  
+	  case 0x40: //采集板压力和温度
+	  /*
+		CheckMotor(40); //40ms定时		
+		T_dat=1234;//没有流量板时暂用一固定数值表示压力
+		SendManchester();
+        CheckMotor(40); //40ms定时		 
+		T_dat=5678;//没有流量板时暂用一固定数值表示温度
+		SendManchester();
+		*/
+		Uart0TxData[0]=0xE8;
+		Uart0TxData[1]=0x40;
+		Uart0TxData[2]=0x89;
+		Uart0TxData[3]=9;
+		SendUart0_2(9,50);//流量板直读检测，超时400ms
+		
+		 T_dat=Uart0RxData[1];
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[0];
+		 SendManchester();//压力
+		 
+		 CheckMotor(30);	
+		 T_dat=Uart0RxData[3];
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[2];
+		 SendManchester();//温度
+	break;
+	
+	case 0x50://流量采样	    	          	  	   	  	 
+		  /*	
+		  CheckMotor(40); //40ms定时		
+		  myFIB.f=123.456; 
+		  T_dat=myFIB.i[1];
+		  SendManchester();
+		  CheckMotor(40);
+		  T_dat=myFIB.i[0];
+		  SendManchester();
+		  CheckMotor(40);
+		  myFIB.f=789.012; 
+		  T_dat=myFIB.i[1];
+		  SendManchester();
+		  CheckMotor(40);
+		  T_dat=myFIB.i[0];
+		  SendManchester();
+		  CheckMotor(40);
+		  */
+		  Uart0TxData[0]=0xE8;
+		  Uart0TxData[1]=0x40;
+		  Uart0TxData[2]=0x89;
+		  Uart0TxData[3]=9;
+		  SendUart0_2(9,50);//流量板直读检测，超时400ms
+		
+		  lfib=Uart0RxData[5];
+		  lfib<<=8;
+		  lfib|=Uart0RxData[4];
+		  lfib&=0x0000ffff;
+		  myFIB.f=(unsigned long)lfib; 
+		  
+		  T_dat=myFIB.i[1];
+		  SendManchester();//流量-时间
+		  crc16array[0]=(unsigned char)(T_dat);
+		  crc16array[1]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	
+		  T_dat=myFIB.i[0];
+		  SendManchester();//流量-时间
+		  crc16array[2]=(unsigned char)(T_dat);
+		  crc16array[3]=(unsigned char)(T_dat>>8);
+	  
+		  CheckMotor(30);	
+		  
+		  lfib=Uart0RxData[7];
+		  lfib<<=8;
+		  lfib|=Uart0RxData[6];
+		  lfib&=0x0000ffff;
+		  myFIB.f=(unsigned long)lfib; 
+		  
+		  T_dat=myFIB.i[1];
+		  SendManchester();//流量-相位1
+		  crc16array[4]=(unsigned char)(T_dat);
+		  crc16array[5]=(unsigned char)(T_dat>>8);
+
+
+		  CheckMotor(30);	
+		  T_dat=myFIB.i[0];
+		  SendManchester();//流量-相位2
+		  crc16array[6]=(unsigned char)(T_dat);
+		  crc16array[7]=(unsigned char)(T_dat>>8);
+		  
+		   CheckMotor(30);	
+		  crc16(crc16array,8);//0.75ms
+		  T_dat=crc16hi;
+		  T_dat<<=8;
+		  T_dat|=crc16lo;	  
+          SendManchester();//上传CRC校验共2字节
+	break;
+ 
+  case 0x60://收放电机   
+    if( !(((R_dat)==0x61)  || ((R_dat)==0x62) ) )//既不是正转，也不是反转，则立即返回且不响应上位机
+	 break;
+	
+    if(PWM2_PIN==1)//调节电机正在运行
+	 {
+	       Motor1Status.s.StartResult=3;//另一电机正在运行
+		   CheckMotor(100);//很快响应上位机
+	 }
+    else if(PWM1_PIN==1)//收放电机正在运行
+	 { 
+	   if( ((DIR1_PIN==1) && (R_dat==0x61)) || ((DIR1_PIN==0) && (R_dat==0x62)) )//20161229
+	    { 
+		   Motor1Status.s.StartResult=1;//本电机正在同向运行
+		}
+		else if( ((DIR1_PIN==1) && (R_dat==0x62)) || ((DIR1_PIN==0) && (R_dat==0x61)) ) //20161229
+		{
+		    Motor1Status.s.StartResult=2;//本电机正在反向运行
+		}
+		CheckMotor(100); //很快响应上位机
+	 }
+	else //二个电机都是停止状态，按命令要求启动电机，约1.5秒后反馈上位机
+	 {  
+	    //全部电机状态置初值，上一次停止原因全部清除
+		Motor1Status.s.BrokenStop=0;
+ 	    Motor1Status.s.CommandStop=0;
+ 	    Motor1Status.s.OverCurrent=0;
+ 	    Motor1Status.s.UnderVoltage=0;
+		Motor1Status.s.StartResult=0;//正常启动
+ 	   	
+		VM_H//开电机电源
+		
+		CheckMotor(500);//开电机电源后需等待半秒让大功率二极管电压稳定
+		 
+	    if((R_dat)==0x61)//张开命令
+		  { 
+		   DIR1_H       //张开
+		  }
+		else          //收拢命令
+		 { 
+		   DIR1_L      //收拢
+		 }
+			
+		//CompCounter=0; //电流监测计数器清0
+		//EIFR|=0x01;//清INT0中断标志
+		//EIMSK&=0xfe;//关INT0中断，电机启动前期不用监测过流情况
+		
+		TCCR1B = 0x00; //stop
+    	TCNT1 = 61629;   //定时500ms
+		TIFR|=0x04; //清定时器1中断标志
+ 		TCCR1B = 0x05; //1024分频
+		TIFR|=0x04; //清定时器1中断标志
+		
+		Pwm_startup(1);//PWM启动，耗时约200ms,电机启动前期不进行电流检查，但有欠压监测		
+			  
+		while((TIFR&0x04)==0x00); //等待定时到，期间可能有欠压中断发生
+		TCCR1B = 0x00; //stop
+		
+		//EIFR|=0x01;//清INT0中断标志
+		//EIMSK|=0x01;//开INT0中断，电机启动500ms后即开始监测过流情况
+
+		CheckMotor(500);//延时保证总线电压稳定		
+     }
+	  T_dat=Motor1Status.i;
+	  SendManchester();	 
+	break;
+	
+	case 0x70://调节电机   
+    if( !(((R_dat)==0x71)  || ((R_dat)==0x72) ) )//既不是调大，也不是调小，则立即返回且不响应上位机
+	 break;
+
+    if(PWM1_PIN==1)//收放电机正在运行
+	 {
+	      Motor2Status.s.StartResult=3;//另一电机正在运行
+		  CheckMotor(100);//很快响应上位机
+	 }
+    else if(PWM2_PIN==1)//调节电机正在运行
+	 { 
+	   if( ((DIR2_PIN==0) && (R_dat==0x71)) || ((DIR2_PIN==1) && (R_dat==0x72)) )
+	    { 
+		   Motor2Status.s.StartResult=1;//本电机正在同向运行
+		}
+		else if( ((DIR2_PIN==0) && (R_dat==0x72)) || ((DIR2_PIN==1) && (R_dat==0x71)) ) 
+		{
+		   Motor2Status.s.StartResult=2;//本电机正在反向运行
+		}	 
+		CheckMotor(100); //很快响应上位机
+	 }
+	else //二个电机都是停止状态，按命令要求启动电机，约1.5秒后反馈上位机
+	 {  
+ 	    //全部电机状态置初值，上一次停止原因全部清除
+		Motor2Status.s.BrokenStop=0;
+ 	    Motor2Status.s.CommandStop=0;
+ 	    Motor2Status.s.OverCurrent=0;
+ 	    Motor2Status.s.UnderVoltage=0;
+		Motor2Status.s.StartResult=0;//正常启动
+		
+		VM_H//开电机电源
+		CheckMotor(500);//开电机电源后需等待半秒让大功率二极管电压稳定
+		
+	    if((R_dat)==0x71)//调大
+		  { 
+		   DIR2_L      //20161229 
+		  }
+		else          //调小
+		 { 
+		   DIR2_H      //20161229 
+		 }
+			
+		//CompCounter=0; //电流监测计数器清0
+		//EIFR|=0x01;//清INT0中断标志
+		//EIMSK&=0xfe;//关INT0中断，电机启动前期不用监测过流情况
+		
+		TCCR1B = 0x00; //stop
+    	TCNT1 = 61629;   //定时500ms
+		TIFR|=0x04; //清定时器1中断标志
+ 		TCCR1B = 0x05; //1024分频
+		TIFR|=0x04; //清定时器1中断标志
+
+		Pwm_startup(2);//PWM启动，耗时约200ms,电机启动前期不进行电流检查，但有欠压监测					
+			  
+		while((TIFR&0x04)==0x00); //等待定时到，期间可能有欠压中断发生
+		TCCR1B = 0x00; //stop
+		
+		//EIFR|=0x01;//清INT0中断标志
+		//EIMSK|=0x01;//开INT0中断，电机启动500ms后即开始监测过流情况
+					
+		CheckMotor(500);//延时保证总线电压稳定		 	 
+     }
+	  T_dat=Motor2Status.i;
+	  SendManchester();		 
+	break;
+ 
+    case 0x80://电机相关命令
+	   if(R_dat==0x80)//只开电机电源，不开电机
+		{        	  
+	      CheckMotor(30);//延迟10ms  
+		  VM_H//开电机电源
+		  CheckMotor(30);//延迟10ms  
+		  T_dat=0x0000;   
+	      SendManchester();
+		}	  
+		else if(R_dat==0x81)//获取电机状态	
+		{ 
+         //先处理收放电机
+	      CheckMotor(30);//延迟10ms  
+		  T_dat=Motor1Status.i;	   
+	      SendManchester();
+		  
+		  //再处理调节电机 
+	      CheckMotor(30);//延迟10ms  
+		  T_dat=Motor2Status.i;	    
+	      SendManchester();
+		}	  
+       else if(R_dat==0x82)//电机停止，同时停止二个电机
+		{	 
+		   if(PWM1_PIN==1)//收放电机正在运行
+   		   {
+ 		   Motor1Status.s.CommandStop=1;
+   		   }
+ 		   if(PWM2_PIN==1)//调节电机正在运行
+   		   { 
+ 		   Motor2Status.s.CommandStop=1;
+   		   }
+ 	 	   MOTORSTOP  //关电机
+		   CheckMotor(200);
+		   T_dat=0x0000;	
+		   SendManchester();	 
+		}
+		else if(R_dat==0x83)//读取电机堵转电流阈值
+	    {
+		  Motor1Thr=EEPROM_read(0);//收放电机
+		  Motor2Thr=EEPROM_read(1);//调节电机
+		  CheckMotor(30);//延迟30ms  	
+		  T_dat=Motor2Thr;	 
+		  T_dat<<=8;
+		  T_dat|=Motor1Thr; 
+	      SendManchester();
+	    }	
+		else if(R_dat>0x83)//还剩12档，用于设置电机堵转电流, 收放电机和调节电机各6档，每档差值30mA,7.721/10mA
+		{
+		  if(R_dat==0x84)
+		  {
+		    Motor1Thr=77;//100mA
+			EEPROM_write(0,Motor1Thr);
+		  }
+		  else if(R_dat==0x85)
+		  {
+		    Motor1Thr=100;//130mA
+			EEPROM_write(0,Motor1Thr);
+		  }
+		  else if(R_dat==0x86)
+		  {
+		    Motor1Thr=139;//180mA
+			EEPROM_write(0,Motor1Thr);
+		  }
+		  else if(R_dat==0x87)
+		  {
+		    Motor1Thr=177;//230mA
+			EEPROM_write(0,Motor1Thr);
+		  }
+		  else if(R_dat==0x88)
+		  {
+		    Motor1Thr=216;//280mA
+			EEPROM_write(0,Motor1Thr);
+		  }
+		  else if(R_dat==0x89)
+		  {
+		    Motor1Thr=255;//330mA
+			EEPROM_write(0,Motor1Thr);
+		  }
+		  else if(R_dat==0x8a)
+		  {
+		    Motor2Thr=77;//100mA
+			EEPROM_write(1,Motor2Thr);
+		  }
+		  else if(R_dat==0x8b)
+		  {
+		    Motor2Thr=100;//130mA
+			EEPROM_write(1,Motor2Thr);
+		  }
+		  else if(R_dat==0x8c)
+		  {
+		    Motor2Thr=139;//180mA
+			EEPROM_write(1,Motor2Thr);
+		  }
+		  else if(R_dat==0x8d)
+		  {
+		    Motor2Thr=177;//230mA
+			EEPROM_write(1,Motor2Thr);
+		  }
+		  else if(R_dat==0x8e)
+		  {
+		    Motor2Thr=216;//280mA
+			EEPROM_write(1,Motor2Thr);
+		  }
+		  else if(R_dat==0x8f)
+		  {
+		    Motor2Thr=255;//330mA
+			EEPROM_write(1,Motor2Thr);
+		  }	  
+		  CheckMotor(30);//延迟30ms  	
+		  T_dat=0;	    
+	      SendManchester(); 
+		}	  
+	break;
+ 
+	
+	 
+	case 0x90: //标定数据
+	  if(R_dat==0x90)//提取测试信息
+	  {
+	     Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0xc8;
+		 Uart0TxData[3]=0;//测试信息包0
+		 SendUart0_2(9,4);// 超时32ms	 
+		 for(i=0;i<32;i++)
+		 {
+		 CheckMotor(20);
+		 T_dat=Uart0RxData[i*2+1];//高字节
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[i*2+0];//低字节
+		 SendManchester();		 
+		 }		
+
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0xc8;
+		 Uart0TxData[3]=1;//测试信息包1
+		 SendUart0_2(9,4);// 超时32ms	 
+		 for(i=0;i<32;i++)
+		 {
+		 T_dat=Uart0RxData[i*2+1];//高字节
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[i*2+0];//低字节
+		 SendManchester();
+		 CheckMotor(20);
+		 }	
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0xc8;
+		 Uart0TxData[3]=2;//测试信息包2
+		 SendUart0_2(9,4);// 超时32ms	 
+		 for(i=0;i<32;i++)
+		 {
+		 T_dat=Uart0RxData[i*2+1];//高字节
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[i*2+0];//低字节
+		 SendManchester();
+		 CheckMotor(20);
+		 }		
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0xc8;
+		 Uart0TxData[3]=3;//测试信息包3
+		 SendUart0_2(9,4);// 超时32ms	 
+		 for(i=0;i<32;i++)
+		 {
+		 T_dat=Uart0RxData[i*2+1];//高字节
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[i*2+0];//低字节
+		 SendManchester();
+		 CheckMotor(20);
+		 }			
+	  }
+	  else if(R_dat==0x91)//上传压力标定数据,20ms/帧 	
+	  {
+	   //先获取总标定点数    
+	     DataFlag=3;
+		 coeff_len=4;//上位机还需传4字节，分别为首块地址和包数
+	     coeff_count=0;
+		 TimeOutFlag=0;
+		 Timer0Counter=200;//1.6s定时
+	     TCNT0=0x06; //8ms
+	     TCCR0|=0x06;//256分频
+	     TIFR|=0x01; //清定时器0中断标志
+         TIMSK|=0x01;//使能定时器0中断		
+		}
+	  else if(R_dat==0x92)//清空标定数据,整机格式化  
+	   { 	
+	     Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x8c;
+		 Uart0TxData[3]=8;
+		 Uart0TxData[4]=0;
+		 Uart0TxData[5]=0;
+		 Uart0TxData[6]=0xff;
+		 Uart0TxData[7]=0xff;
+		 SendUart0_3(9,5000,9);// 最大超时40秒
+		 if((Uart0RxCounter==9)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x40)&&(Uart0RxData[2]==0x8c))
+		 {T_dat=0x0000;}
+		 else
+		 {T_dat=0xffff;}
+		 SendManchester();	 
+	  }
+	   else if(R_dat==0x93)//上传全部系数，共256字节分128帧上传
+	   {
+	     Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=0;//系数包0
+		 SendUart0_2(9,4);// 超时32ms	
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   CheckMotor(20);
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();		 
+		   }	
+		 }	
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=1;//系数包1
+		 SendUart0_2(9,4);// 超时32ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }		
+		 
+		  Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=2;//系数包2
+		 SendUart0_2(9,4);// 超时32ms	
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   CheckMotor(20);
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();		 
+		   }	
+		 }	
+
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=3;//系数包3
+		 SendUart0_2(9,4);// 超时32ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }		
+	   }
+	  
+  break;
+  
+	case 0xa0://压力标定系数
+	   if(R_dat==0xa0)//下发全部标定系数，共128字节,20ms/帧，共2560ms   
+	   { 
+		 DataFlag=1;
+		 coeff_len=128;
+		 coeff_count=0;
+		 TimeOutFlag=0;
+		 Timer0Counter=1000;//8s定时
+	     TCNT0=0x06; //8ms
+	     TCCR0|=0x06;//256分频
+	     TIFR|=0x01; //清定时器0中断标志
+         TIMSK|=0x01;//使能定时器0中断				    
+	   }
+	  else if(R_dat==0xa1)//上传标定系数,28ms/帧 ，共64帧128字节
+	  {    
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=0;//系数包0
+		 SendUart0_2(9,5);// 超时40ms	
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   CheckMotor(20);
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();		 
+		   }	
+		 }	
+
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=1;//系数包1
+		 SendUart0_2(9,5);// 超时40ms		 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }		
+	  }
+	break;
+	
+	
+	case 0xB0://流量相关
+	  if(R_dat==0xb0) //下发流量系数
+	  {
+	     DataFlag=2;
+		 coeff_len=128;
+		 coeff_count=0;
+		 TimeOutFlag=0;
+		 Timer0Counter=1000;//8s定时
+	     TCNT0=0x06; //8ms
+	     TCCR0|=0x06;//256分频
+	     TIFR|=0x01; //清定时器0中断标志
+         TIMSK|=0x01;//使能定时器0中断		
+	  }
+	  else  if(R_dat==0xb1)//上提流量系数
+	  {
+	     Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=2;//系数包2
+		 SendUart0_2(9,5);// 超时40ms	
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   CheckMotor(20);
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();		 
+		   }	
+		 }	
+
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x87;
+		 Uart0TxData[3]=3;//系数包3
+		 SendUart0_2(9,5);// 超时40ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }		
+	  }
+	/*   if(R_dat==0xb1)//读幅值
+	   {
+		 SendUart0(0xb0,5);//40ms定时
+		 for(k=0;k<8;k+=2)
+		  {
+		  T_dat=Uart0RxData[k];
+		  T_dat<<=8;
+		  T_dat|=Uart0RxData[k+1];
+		  SendManchester();
+		  CheckMotor(40);
+		  }
+		}
+		else  if((R_dat>0xb0) && (R_dat<0xb5) )//1800点提取,连续提取流量测试数据，4个通道分别提取，命令为0xB1-0xB4
+        {   
+		  SendUart0(R_dat,125);//1s定时	 
+		  for(k=0;k<1800;k++)//共1800帧数据，全部提取
+		  {
+		  SendUart0(0xFF,1);//8ms定时	   
+		  T_dat=Uart0RxData[0];
+		  T_dat<<=8;
+		  T_dat|=Uart0RxData[1];
+		  SendManchester();
+		  CheckMotor(42);
+		  }
+		} */  
+	break;
+
+    case 0xc0://所有参数全采，上传16字节共8帧
+		 if(R_dat==0xc0)
+	 {
+		Uart0TxData[0]=0xE8;
+		Uart0TxData[1]=0x40;
+		Uart0TxData[2]=0x89;
+		Uart0TxData[3]=9;
+		SendUart0_2(9,50);//流量板直读检测，超时400ms
+		if(Uart0RxCounter==64)//成功接收到压力、温度、流量数据，先低字节后高字节
+		{
+		 T_dat=Uart0RxData[1];
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[0];
+		 SendManchester();//压力
+		 crc16array[0]=(unsigned char)(T_dat);
+		 crc16array[1]=(unsigned char)(T_dat>>8);
+		 
+		 
+		 CheckMotor(30);	
+		 T_dat=Uart0RxData[3];
+		 T_dat<<=8;
+		 T_dat|=Uart0RxData[2];
+		 SendManchester();//温度
+		 crc16array[2]=(unsigned char)(T_dat);
+		 crc16array[3]=(unsigned char)(T_dat>>8);
+		 
+		  CheckMotor(30);	
+		  
+		  lfib=Uart0RxData[5];
+		  lfib<<=8;
+		  lfib|=Uart0RxData[4];
+		  lfib&=0x0000ffff;
+		  myFIB.f=(unsigned long)lfib; 
+		  
+		  T_dat=myFIB.i[1];
+		  SendManchester();//流量-时间1
+		  crc16array[4]=(unsigned char)(T_dat);
+		  crc16array[5]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	
+		  T_dat=myFIB.i[0];
+		  SendManchester();//流量-时间2
+		  crc16array[6]=(unsigned char)(T_dat);
+		  crc16array[7]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	
+		  
+		  lfib=Uart0RxData[7];
+		  lfib<<=8;
+		  lfib|=Uart0RxData[6];
+		  lfib&=0x0000ffff;
+		  myFIB.f=(unsigned long)lfib; 
+		  
+		  T_dat=myFIB.i[1];
+		  SendManchester();//流量-相位1
+		  crc16array[8]=(unsigned char)(T_dat);
+		  crc16array[9]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	
+		  T_dat=myFIB.i[0];
+		  SendManchester();//流量-相位2
+		  crc16array[10]=(unsigned char)(T_dat);
+		  crc16array[11]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	 
+		  T_dat=Motor1Status.i;
+		  SendManchester();//收放电机状态
+		  crc16array[12]=(unsigned char)(T_dat);
+		  crc16array[13]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	 
+		  T_dat=Motor2Status.i;
+		  SendManchester();//调节电机状态
+		  crc16array[14]=(unsigned char)(T_dat);
+		  crc16array[15]=(unsigned char)(T_dat>>8);
+		  
+		  CheckMotor(30);	
+		  crc16(crc16array,16);//0.75ms
+		  T_dat=crc16hi;
+		  T_dat<<=8;
+		  T_dat|=crc16lo;	  
+          SendManchester();//上传CRC校验共2字节
+		 }	
+		}
+		else  if(R_dat==0xc5) //读仪器信息,共320字节，分5次从流量板中提取，每包64字节
+		{
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x83;
+		 Uart0TxData[3]=0;//包0
+		 SendUart0_2(9,5);// 超时40ms	
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   CheckMotor(20);
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();		 
+		   }	
+		 }	
+
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x83;
+		 Uart0TxData[3]=1;//包1
+		 SendUart0_2(9,5);// 超时40ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }	
+		 	
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x83;
+		 Uart0TxData[3]=2;//包2
+		 SendUart0_2(9,5);// 超时40ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }	
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x83;
+		 Uart0TxData[3]=3;//包3
+		 SendUart0_2(9,5);// 超时40ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }	
+		 
+		 Uart0TxData[0]=0xE8;
+		 Uart0TxData[1]=0x40;
+		 Uart0TxData[2]=0x83;
+		 Uart0TxData[3]=4;//包4
+		 SendUart0_2(9,5);// 超时40ms	 
+		 if(Uart0RxCounter==64) 
+		  {
+		   for(i=0;i<32;i++)
+		   {
+		   T_dat=Uart0RxData[i*2+1];//高字节
+		   T_dat<<=8;
+		   T_dat|=Uart0RxData[i*2+0];//低字节
+		   SendManchester();
+		   CheckMotor(20);
+		  }
+		 }	
+		 
+		}
+		else  if(R_dat==0xca) //写仪器信息
+		{
+		 DataFlag=4;
+		 coeff_len=320;
+		 coeff_count=0;
+		 TimeOutFlag=0;
+		 Timer0Counter=2000;//16s定时
+	     TCNT0=0x06; //8ms
+	     TCCR0|=0x06;//256分频
+	     TIFR|=0x01; //清定时器0中断标志
+         TIMSK|=0x01;//使能定时器0中断		
+		}
+	break;
+    default: 
+	break;	
+   }
+  }
+RDataEnd:
+	IntFlag=0;
+    EIFR|=0x08;//清INT3中断标志
+    EIMSK|=0x08;//使能INT3中断 
+  }  
+  }
+}
+
+#pragma interrupt_handler E_comp:24
+void E_comp(void)  //模拟比较器中断,总线电压被拉低到28.5V后，立即停电机
+{   
+  if(PWM1_PIN==1)//收放电机欠压堵转
+   {
+ 	 Motor1Status.s.UnderVoltage=1;
+   }
+  if(PWM2_PIN==1)//调节电机欠压堵转
+   { 
+ 	Motor2Status.s.UnderVoltage=1;
+   } 
+   MOTORSTOP  //关电机 
+}
+
+/*
+#pragma interrupt_handler int0_isr:2
+void int0_isr(void)//外部中断0，过流堵转
+{
+  CompCounter++; 
+  if(CompCounter>1000)
+  {
+   MOTORSTOP  //关电机
+  
+   if(Motor1Status.s.ThisRun>0)//收放电机过流堵转
+    {
+	 Motor1Status.s.ThisRun=0;
+	 Motor1Status.s.CommandStop=0;
+ 	 Motor1Status.s.OverCurrent=1;
+ 	 Motor1Status.s.UnderVoltage=0;
+	}
+   if(Motor2Status.s.ThisRun>0)//调节电机过流堵转
+    {
+	  Motor2Status.s.ThisRun=0;
+	  Motor2Status.s.CommandStop=0;
+ 	  Motor2Status.s.OverCurrent=1;
+ 	  Motor2Status.s.UnderVoltage=0;
+	}
+  }
+}
+*/
+#pragma interrupt_handler usart0_isr:19
+void usart0_isr(void) //串口接收中断
+{
+    if(Uart0RxCounter<74)
+	{
+    Uart0RxData[Uart0RxCounter]=UDR0;//接收串口数据,同时清空串口接收中断标志
+ 	Uart0RxCounter++;
+	}
+}
+
+/*
+#pragma interrupt_handler ad_isr:22
+void ad_isr(void)  //ad转换中断
+{
+  ADCData[ADCCn]=ADCH;
+  ADCData[ADCCn]<<=8;
+  ADCData[ADCCn]|=ADCL;//读AD转换结果
+  ADCCn++;
+  ADCData[ADCCn]&=0x03ff;//10位有效转换结果
+  if(ADCCn==129)
+   { 
+   ADCSRA&=0xF7;//关AD中断
+   ADCSRA|=0x10;//清AD中断标志
+   ADCSRA=0;//关ADC
+   }
+}
+*/
+
+#pragma interrupt_handler int3_isr:iv_INT3
+void int3_isr(void)//外部中断3
+{ 
+   SREG&=0x7f;//关总中断
+   EIMSK&=0xF7;//关INT3  
+   TCCR2 = 0x00; //stop
+  
+  DELAY10
+  EIFR|=0x08;//清INT3中断标志 
+  if((PIND&0x08)==0x00)//高脉冲不足10us则直接跳出
+  {
+   goto End;
+  }
+   
+   TCNT2 = 0x00;  
+   TCCR2 = 0x03; //64分频,8M时钟，每个CLOCK耗时8us，最大定时2048us，每周期10个计数
+   
+   while(1)
+   {
+     T2cn=TCNT2;
+	  if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+	  {
+	    goto End;
+	  }
+     if((PIND&0x08)==0x00)
+	 {
+	   DELAY20
+	   if((PIND&0x08)==0x00)
+	    {
+	      break;
+	    }
+	 }
+   }
+     		   
+    //开始判断同步头	
+	while(1)//还没有上升沿到来,死等
+	{
+	  T2cn=TCNT2;
+	  if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+	  {
+	    goto End;
+	  }
+	  if((EIFR&0x08)==0x08)
+	  {
+	   DELAY10
+	   EIFR|=0x08;//清INT3中断标志 
+	   if((PIND&0x08)==0x08)//高脉冲维持了10us，则认为是下一个有效上升沿到来
+	     {
+   	     break;
+		 }
+	  }  
+	}
+	T2cn=TCNT2;
+	TCNT2=0;
+	if((T2cn<60)||(T2cn>80))//同步头本应是7个周期，但收到的结果为6~8个周期内都认可
+	{
+	 goto End;//没有收到正确的同步头，直接跳出
+	}
+	
+Start:	//同步头解码正确，下面开始接收9位数据位	//按位从高到低接收数据位，8位数据加1位校验共9位 		      	
+  for(Int_count=9;Int_count>0;Int_count--)
+  {	
+   while(1)
+   {
+     T2cn=TCNT2;
+	  if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+	  {
+	    goto End;
+	  }
+     if((PIND&0x08)==0x00)
+	 {
+	   DELAY20
+	   if((PIND&0x08)==0x00)
+	    {
+	      break;
+	    }
+	 }
+   } 
+   while(1)//还没有上升沿到来,死等
+	{
+	  T2cn=TCNT2;
+	  if(T2cn>80)//设计值最多7个周期，在此多给一个周期，则超过8个周期还没来上升沿中断到来就直接跳出
+	  {
+	    goto End;
+	  }
+	  if((EIFR&0x08)==0x08)
+	  {
+	   DELAY10
+	   EIFR|=0x08;//清INT3中断标志 
+	   if((PIND&0x08)==0x08)//高脉冲维持了10us，则认为是下一个有效上升沿到来
+	     {
+   	     break;
+		 }
+	  }  
+	}
+	T2cn=TCNT2;
+	TCNT2=0;
+	if(T2cn<20)//数据位最小是3位，可放宽到2位
+	{
+	 IntFlag=3;//接收数据位不完整
+	 goto End;//数据位来得太早，退出
+	}
+	else if((T2cn>=20)&&(T2cn<40))//数据位1本应是3个周期，在此我们认为2~4个周期都是可以的
+	{
+	 Rx[Int_count]=1;
+	}
+	else if((T2cn>=40)&&(T2cn<60))//数据位0本应是5个周期，在此我们认为4~6个周期都是可以的
+	{
+	 Rx[Int_count]=0;
+	}
+	else if((T2cn>=60)&&(T2cn<=80))//同步位本应是7周期，在此我们认为6~8周期都是可以的
+	{
+	 goto Start;//在接收数据位时收到了同步位，跳到数据位解码起始位处
+	}
+	else 
+	{
+	 IntFlag=3;//接收数据位不完整
+	 goto End;//数据位来得太迟，退出
+	}
+  }   
+	
+    R_dat=0;
+    if(Rx[2])
+          R_dat|=0x01;
+    if(Rx[3])
+          R_dat|=0x02;
+    if(Rx[4])
+          R_dat|=0x04;
+    if(Rx[5])
+          R_dat|=0x08;
+    if(Rx[6])
+          R_dat|=0x10;
+    if(Rx[7])
+          R_dat|=0x20;
+    if(Rx[8])
+          R_dat|=0x40;
+    if(Rx[9])
+          R_dat|=0x80;
+	
+	Rx[0]=1;  
+	for(Int_count=2;Int_count<10;Int_count++)  
+       Rx[0]^=Rx[Int_count];  
+	   
+	if(Rx[0]==Rx[1])
+	 {
+		 IntFlag=1;//接收帧正常	
+	 }
+	else           
+	 {
+		 IntFlag=2;//接收帧校验错
+	 }
+	   
+   goto End1;//只要接收到正常的同步头，不管校验位是对是错，都暂时不开放INT0中断
+     
+End:
+ EIFR|=0x08;//清INT3中断标志 
+ EICRA|=0xc0; //INT3上升沿触发 
+ EIMSK|=0x08;//使能INT3中断 
+End1:
+   TCCR2 = 0x00; //stop
+   SREG|=0x80;//总中断使能;  
+}
+
+void SendManchester(void) //曼码发送程序,总耗时最大约120+560+8400+720=9800us，最小约120+560+5040+720=6440us
+{ //每位80us
+ //同步：1高6低
+ //1:    1高2低
+ //0：   1高4低  
+  unsigned char L;
+  SREG&=0x7f;//关总中断 
+  
+    M1_H //先给总线放电，耗时约120us
+	
+  //模拟同步头数据
+	//4位命令
+	T_dat_buf[21]=(T_com&0x08)>>3;
+	T_dat_buf[20]=(T_com&0x04)>>2;
+	T_dat_buf[19]=(T_com&0x02)>>1;
+	T_dat_buf[18]=T_com&0x01;
+	//16位数据
+	T_dat_buf[17]=(T_dat&0x8000)>>15;
+	T_dat_buf[16]=(T_dat&0x4000)>>14;
+	T_dat_buf[15]=(T_dat&0x2000)>>13;
+	T_dat_buf[14]=(T_dat&0x1000)>>12;
+	T_dat_buf[13]=(T_dat&0x0800)>>11;
+    T_dat_buf[12]=(T_dat&0x0400)>>10;
+    T_dat_buf[11]=(T_dat&0x0200)>>9;
+	T_dat_buf[10]=(T_dat&0x0100)>>8;
+	T_dat_buf[9]=(T_dat&0x0080)>>7;
+	T_dat_buf[8]=(T_dat&0x0040)>>6;
+	T_dat_buf[7]=(T_dat&0x0020)>>5;
+	T_dat_buf[6]=(T_dat&0x0010)>>4;
+	T_dat_buf[5]=(T_dat&0x0008)>>3;
+	T_dat_buf[4]=(T_dat&0x0004)>>2;
+	T_dat_buf[3]=(T_dat&0x0002)>>1;
+	T_dat_buf[2]=T_dat&0x0001;
+	//计算校验位，奇校验
+	T_dat_buf[1]=1;
+  	for(L=2;L<22;L++)
+		{T_dat_buf[1]^=T_dat_buf[L];}
+    DELAY80
+    M1_L
+	DELAY40
+   
+   
+	//同步头,560us
+	//充电开始，高80us	 
+	M2_H 	
+	DELAY80
+	M2_L   //充电结束	
+	//放电开始，低80*6=480us
+	DELAY40
+	M1_H    
+    DELAY80
+	DELAY80
+	DELAY80
+	DELAY80
+	DELAY80
+	M1_L    
+	DELAY40  //放电结束
+	
+     //连续发送 ,全0时每位400us，共8400us，全1时每位240us，共5040us
+ 	for(L=21;L>0;L--)
+	{   
+	  if(T_dat_buf[L])//1，一高二低
+        {         	 		
+	        M2_H 
+	        DELAY80
+	        M2_L
+			DELAY40
+	        M1_H       
+         	DELAY80
+			M1_L
+			DELAY40
+		} 
+       else 		//0，一高四低 				                
+        {
+		 	M2_H 
+	        DELAY80
+	        M2_L
+			DELAY40
+	        M1_H       
+         	DELAY80
+			DELAY80
+			DELAY80
+			M1_L
+			DELAY40
+		}
+    }	       	   
+		   //结束位，一高八低，720us
+ 	 	    M2_H 
+		    DELAY80
+	        M2_L
+			DELAY40
+	        M1_H       
+         	DELAY80
+			DELAY80
+			DELAY80
+			DELAY80
+			DELAY80
+			DELAY80
+			DELAY80
+			M1_L
+			DELAY40
+	
+ 	EIFR|=0x08;//清INT3中断标志 
+ 	SREG|=0x80; //开总中断
+}
+
+
+
+void EEPROM_write(unsigned int Address,unsigned char Data)  	//内部EEPROM写
+{//时钟频率为1MHz，典型的EEPROM字节写耗时约8.5ms
+    while(EECR&0x02);                   // 等待上一次写操作结束
+    EEAR=Address;
+    EEDR=Data;                        	// 设置地址和数据寄存器
+    EECR|=0x04;                         //置位EEMWE
+    EECR|=0x02;                         //置位EEWE 以启动写操作
+}
+
+unsigned char EEPROM_read(unsigned int Address)  				//内部EEPROM读
+{
+    while(EECR&0x02);      				//等待上一次操作结束
+    EEAR = Address;                     //设置地址寄存器						
+	EECR|=0x01;             			//设置EERE 以启动读操作
+    return EEDR;                   		//自数据寄存器返回数据
+}    
+
+void crc16(unsigned char r_data[],unsigned int length)
+{
+        unsigned char cl,ch;
+        unsigned char savehi,savelo;
+        int ii,flag;
+        crc16hi=0xFF;
+        crc16lo=0xFF;
+        cl=0x1;
+        ch=0xA0;
+        for (ii=0;ii<length-2;ii++)
+        {
+            crc16lo=(crc16lo ^ r_data[ii]);
+                for (flag=0;flag<8;flag++)
+                {
+                       savehi=crc16hi;
+                        savelo=crc16lo;
+                       crc16hi=(crc16hi>>1);
+                       crc16lo=(crc16lo>>1);
+                        if ((savehi & 0x01)==0x01)
+                                crc16lo=(crc16lo | 0x80);
+                        if        ((savelo & 0x01)==0x01)
+                        {
+                                crc16hi = (crc16hi ^ ch);
+								crc16lo = (crc16lo ^ cl);
+                        }        
+                }
+        }
+}

@@ -1,0 +1,336 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.5.4	//
+!_TAG_REVISION_NAME	MCHPTags	//
+!_TAG_REVISION_VERSION	6.0.1	//
+AD_value	E:\CLLJA-20150124(JMV1.1)\main.c	8;"	v	line:8
+Adjzero_addr::0XFA	E:\CLLJA-20150124(JMV1.1)\define.h	35;"	d	line:35
+Allinfo	E:\CLLJA-20150124(JMV1.1)\define.h	131;"	u	line:131
+BLOCKNUM::1024	E:\CLLJA-20150124(JMV1.1)\define.h	18;"	d	line:18
+BLOCKYU::0XFFF	E:\CLLJA-20150124(JMV1.1)\define.h	20;"	d	line:20
+CDT::PORTEbits.RE1	E:\CLLJA-20150124(JMV1.1)\define.h	51;"	d	line:51
+CDT_TRIS::TRISEbits.TRISE1	E:\CLLJA-20150124(JMV1.1)\define.h	52;"	d	line:52
+CLOSE::PORTEbits.RE0	E:\CLLJA-20150124(JMV1.1)\define.h	49;"	d	line:49
+CLOSE_TRIS::TRISEbits.TRISE0	E:\CLLJA-20150124(JMV1.1)\define.h	50;"	d	line:50
+CS0::{CS=0;Nop;Nop;Nop;Nop;Nop;}	E:\CLLJA-20150124(JMV1.1)\define.h	59;"	d	line:59
+CS1::{Nop;Nop;Nop;Nop;Nop;CS=1;}	E:\CLLJA-20150124(JMV1.1)\define.h	60;"	d	line:60
+CS::PORTDbits.RD5	E:\CLLJA-20150124(JMV1.1)\define.h	57;"	d	line:57
+CSZERO	E:\CLLJA-20150124(JMV1.1)\define.h	126;"	m	line:126	struct:Testinfo
+CS_TRIS::TRISDbits.TRISD5	E:\CLLJA-20150124(JMV1.1)\define.h	58;"	d	line:58
+CSzero_addr::0XFC	E:\CLLJA-20150124(JMV1.1)\define.h	36;"	d	line:36
+CTRL::PORTEbits.RE2	E:\CLLJA-20150124(JMV1.1)\define.h	53;"	d	line:53
+CTRL_TRIS::TRISEbits.TRISE2	E:\CLLJA-20150124(JMV1.1)\define.h	54;"	d	line:54
+Caltab_addr::0X3000	E:\CLLJA-20150124(JMV1.1)\define.h	13;"	d	line:13
+Caltab_block::3	E:\CLLJA-20150124(JMV1.1)\define.h	12;"	d	line:12
+Close_avdd	E:\CLLJA-20150124(JMV1.1)\define.h	149;"	p	line:149	signature:(void)
+Close_avdd	E:\CLLJA-20150124(JMV1.1)\main.c	153;"	f	line:153	signature:(void)
+Com_mode	E:\CLLJA-20150124(JMV1.1)\define.h	140;"	p	line:140	signature:(void)
+Com_mode	E:\CLLJA-20150124(JMV1.1)\main.c	191;"	f	line:191	signature:(void)
+Count_addr::0XF6	E:\CLLJA-20150124(JMV1.1)\define.h	31;"	d	line:31
+DataFull	E:\CLLJA-20150124(JMV1.1)\define.h	120;"	m	line:120	struct:Testinfo
+DataFull_addr::0XF5	E:\CLLJA-20150124(JMV1.1)\define.h	30;"	d	line:30
+Data_addr::0X5000	E:\CLLJA-20150124(JMV1.1)\define.h	17;"	d	line:17
+Delay_mS	E:\CLLJA-20150124(JMV1.1)\define.h	151;"	p	line:151	signature:(uint)
+Delay_mS	E:\CLLJA-20150124(JMV1.1)\device.c	3;"	f	line:3	signature:(uint t)
+Delay_uS	E:\CLLJA-20150124(JMV1.1)\define.h	152;"	p	line:152	signature:(uchar)
+Delay_uS	E:\CLLJA-20150124(JMV1.1)\device.c	11;"	f	line:11	signature:(uchar t)
+Delete_data	E:\CLLJA-20150124(JMV1.1)\define.h	164;"	p	line:164	signature:(void)
+Delete_data	E:\CLLJA-20150124(JMV1.1)\device.c	476;"	f	line:476	signature:(void)
+E2550addr	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250
+End_block	E:\CLLJA-20150124(JMV1.1)\device.c	251;"	l	line:251
+Erase_DF321block	E:\CLLJA-20150124(JMV1.1)\define.h	212;"	p	line:212	signature:(uint)
+Erase_DF321block	E:\CLLJA-20150124(JMV1.1)\device.c	749;"	f	line:749	signature:(uint BlockAddr)
+Etabaddr	E:\CLLJA-20150124(JMV1.1)\device.c	1206;"	l	line:1206
+Etabaddr	E:\CLLJA-20150124(JMV1.1)\device.c	253;"	l	line:253
+Etabaddr	E:\CLLJA-20150124(JMV1.1)\device.c	436;"	l	line:436
+Etabaddr	E:\CLLJA-20150124(JMV1.1)\device.c	478;"	l	line:478
+Etabaddr	E:\CLLJA-20150124(JMV1.1)\main.c	318;"	l	line:318
+F1CS0::{F1CS=0;Nop;Nop;Nop;Nop;}	E:\CLLJA-20150124(JMV1.1)\define.h	74;"	d	line:74
+F1CS1::{Nop;Nop;Nop;Nop;F1CS=1;}	E:\CLLJA-20150124(JMV1.1)\define.h	75;"	d	line:75
+F1CS::PORTBbits.RB0	E:\CLLJA-20150124(JMV1.1)\define.h	72;"	d	line:72
+F1CS_TRIS::TRISBbits.TRISB0	E:\CLLJA-20150124(JMV1.1)\define.h	73;"	d	line:73
+F2CS0::{F2CS=0;Nop;Nop;}	E:\CLLJA-20150124(JMV1.1)\define.h	79;"	d	line:79
+F2CS1::{Nop;Nop;F2CS=1;}	E:\CLLJA-20150124(JMV1.1)\define.h	80;"	d	line:80
+F2CS::PORTBbits.RB4	E:\CLLJA-20150124(JMV1.1)\define.h	77;"	d	line:77
+F2CS_TRIS::TRISBbits.TRISB4	E:\CLLJA-20150124(JMV1.1)\define.h	78;"	d	line:78
+FSI::PORTBbits.RB3	E:\CLLJA-20150124(JMV1.1)\define.h	70;"	d	line:70
+FSI_TRIS::TRISBbits.TRISB3	E:\CLLJA-20150124(JMV1.1)\define.h	71;"	d	line:71
+FSO::PORTBbits.RB2	E:\CLLJA-20150124(JMV1.1)\define.h	68;"	d	line:68
+FSO_TRIS::TRISBbits.TRISB2	E:\CLLJA-20150124(JMV1.1)\define.h	69;"	d	line:69
+Flashaddr	E:\CLLJA-20150124(JMV1.1)\device.c	663;"	l	line:663
+Flashaddr	E:\CLLJA-20150124(JMV1.1)\device.c	717;"	l	line:717
+Get_para	E:\CLLJA-20150124(JMV1.1)\define.h	155;"	p	line:155	signature:(void)
+Get_para	E:\CLLJA-20150124(JMV1.1)\device.c	248;"	f	line:248	signature:(void)
+Get_pgain	E:\CLLJA-20150124(JMV1.1)\define.h	145;"	p	line:145	signature:(void)
+Get_pgain	E:\CLLJA-20150124(JMV1.1)\main.c	170;"	f	line:170	signature:(void)
+Info_addr::0X1000	E:\CLLJA-20150124(JMV1.1)\define.h	9;"	d	line:9
+Info_block::1	E:\CLLJA-20150124(JMV1.1)\define.h	8;"	d	line:8
+Ini_port	E:\CLLJA-20150124(JMV1.1)\define.h	146;"	p	line:146	signature:(void)
+Ini_port	E:\CLLJA-20150124(JMV1.1)\main.c	93;"	f	line:93	signature:(void)
+Int_dealy	E:\CLLJA-20150124(JMV1.1)\main.c	11;"	v	line:11
+Inter_loop	E:\CLLJA-20150124(JMV1.1)\define.h	103;"	s	line:103
+Lch2	E:\CLLJA-20150124(JMV1.1)\define.h	88;"	u	line:88
+Lch3	E:\CLLJA-20150124(JMV1.1)\define.h	93;"	u	line:93
+Lch4	E:\CLLJA-20150124(JMV1.1)\define.h	98;"	u	line:98
+Lch8	E:\CLLJA-20150124(JMV1.1)\define.h	108;"	u	line:108
+Loop_addr::0X00	E:\CLLJA-20150124(JMV1.1)\define.h	23;"	d	line:23
+Looppoint_addr::0XF4	E:\CLLJA-20150124(JMV1.1)\define.h	29;"	d	line:29
+Meas_Time	E:\CLLJA-20150124(JMV1.1)\define.h	188;"	p	line:188	signature:(void)
+Meas_Time	E:\CLLJA-20150124(JMV1.1)\device.c	1082;"	f	line:1082	signature:(void)
+Mode	E:\CLLJA-20150124(JMV1.1)\main.c	317;"	l	line:317
+N	E:\CLLJA-20150124(JMV1.1)\device.c	49;"	l	line:49
+Open_avdd	E:\CLLJA-20150124(JMV1.1)\define.h	148;"	p	line:148	signature:(void)
+Open_avdd	E:\CLLJA-20150124(JMV1.1)\main.c	127;"	f	line:127	signature:(void)
+Pgain	E:\CLLJA-20150124(JMV1.1)\main.c	11;"	v	line:11
+Pgain_addr::0XF7	E:\CLLJA-20150124(JMV1.1)\define.h	32;"	d	line:32
+Points_addr::0XF1	E:\CLLJA-20150124(JMV1.1)\define.h	27;"	d	line:27
+PreAD8343_P1	E:\CLLJA-20150124(JMV1.1)\define.h	183;"	p	line:183	signature:(void)
+PreAD8343_P1	E:\CLLJA-20150124(JMV1.1)\device.c	1032;"	p	line:1032	file:
+PreAD8343_P1	E:\CLLJA-20150124(JMV1.1)\device.c	949;"	f	line:949	signature:(void)
+PreAD8343_P1	E:\CLLJA-20150124(JMV1.1)\device.c	982;"	p	line:982	file:
+PreAD8343_T1	E:\CLLJA-20150124(JMV1.1)\define.h	184;"	p	line:184	signature:(void)
+PreAD8343_T1	E:\CLLJA-20150124(JMV1.1)\device.c	1007;"	p	line:1007	file:
+PreAD8343_T1	E:\CLLJA-20150124(JMV1.1)\device.c	1125;"	p	line:1125	file:
+PreAD8343_T1	E:\CLLJA-20150124(JMV1.1)\device.c	963;"	f	line:963	signature:(void)
+R2550	E:\CLLJA-20150124(JMV1.1)\define.h	174;"	p	line:174	signature:(uchar)
+R2550	E:\CLLJA-20150124(JMV1.1)\device.c	789;"	f	line:789	signature:(uchar temp_addr)
+ROTATEBIT::12	E:\CLLJA-20150124(JMV1.1)\define.h	19;"	d	line:19
+RX::PORTCbits.RC7	E:\CLLJA-20150124(JMV1.1)\define.h	46;"	d	line:46
+RX_TMIE1_inter	E:\CLLJA-20150124(JMV1.1)\main.c	16;"	p	line:16	file:	signature:(void)
+RX_TMIE1_inter	E:\CLLJA-20150124(JMV1.1)\main.c	26;"	f	line:26	signature:(void)
+RX_TRIS::TRISCbits.TRISC7	E:\CLLJA-20150124(JMV1.1)\define.h	44;"	d	line:44
+ReadAD8343_16F1	E:\CLLJA-20150124(JMV1.1)\define.h	189;"	p	line:189	signature:(void)
+ReadAD8343_16F1	E:\CLLJA-20150124(JMV1.1)\device.c	1027;"	f	line:1027	signature:(void)
+ReadAD8343_16P1	E:\CLLJA-20150124(JMV1.1)\define.h	185;"	p	line:185	signature:(void)
+ReadAD8343_16P1	E:\CLLJA-20150124(JMV1.1)\device.c	977;"	f	line:977	signature:(void)
+ReadAD8343_16T1	E:\CLLJA-20150124(JMV1.1)\define.h	186;"	p	line:186	signature:(void)
+ReadAD8343_16T1	E:\CLLJA-20150124(JMV1.1)\device.c	1002;"	f	line:1002	signature:(void)
+ReadAD8343_VBat	E:\CLLJA-20150124(JMV1.1)\define.h	190;"	p	line:190	signature:(void)
+ReadAD8343_VBat	E:\CLLJA-20150124(JMV1.1)\device.c	1121;"	f	line:1121	signature:(void)
+ReadAD_MODE0	E:\CLLJA-20150124(JMV1.1)\define.h	192;"	p	line:192	signature:(void)
+ReadAD_MODE0	E:\CLLJA-20150124(JMV1.1)\device.c	1144;"	f	line:1144	signature:(void)
+ReadAD_MODE1	E:\CLLJA-20150124(JMV1.1)\define.h	193;"	p	line:193	signature:(void)
+ReadAD_MODE1	E:\CLLJA-20150124(JMV1.1)\device.c	1157;"	f	line:1157	signature:(void)
+ReadAD_MODE2	E:\CLLJA-20150124(JMV1.1)\define.h	194;"	p	line:194	signature:(void)
+ReadAD_MODE2	E:\CLLJA-20150124(JMV1.1)\device.c	1170;"	f	line:1170	signature:(void)
+ReadAD_MODE8	E:\CLLJA-20150124(JMV1.1)\define.h	195;"	p	line:195	signature:(void)
+ReadAD_MODE8	E:\CLLJA-20150124(JMV1.1)\device.c	1183;"	f	line:1183	signature:(void)
+ReadT0_8	E:\CLLJA-20150124(JMV1.1)\define.h	187;"	p	line:187	signature:(void)
+ReadT0_8	E:\CLLJA-20150124(JMV1.1)\device.c	1062;"	f	line:1062	signature:(void)
+Read_DF321ID	E:\CLLJA-20150124(JMV1.1)\define.h	210;"	p	line:210	signature:(uint,uchar *)
+Read_DF321ID	E:\CLLJA-20150124(JMV1.1)\device.c	690;"	f	line:690	signature:(uint block, uchar *mBuf )
+Read_DF321page	E:\CLLJA-20150124(JMV1.1)\define.h	209;"	p	line:209	signature:(uint,uint,uint,uchar *)
+Read_DF321page	E:\CLLJA-20150124(JMV1.1)\device.c	661;"	f	line:661	signature:(uint block,uint excursion,uint mLen, uchar *mBuf )
+Read_status	E:\CLLJA-20150124(JMV1.1)\define.h	206;"	p	line:206	signature:(uint)
+Read_status	E:\CLLJA-20150124(JMV1.1)\device.c	620;"	f	line:620	signature:(uint block)
+RecAD8343	E:\CLLJA-20150124(JMV1.1)\define.h	180;"	p	line:180	signature:(void)
+RecAD8343	E:\CLLJA-20150124(JMV1.1)\device.c	819;"	f	line:819	signature:(void)
+Rinter	E:\CLLJA-20150124(JMV1.1)\main.c	10;"	v	line:10
+Rx	E:\CLLJA-20150124(JMV1.1)\define.h	154;"	p	line:154	signature:(void)
+Rx	E:\CLLJA-20150124(JMV1.1)\device.c	25;"	f	line:25	signature:(void)
+Rx_Testinfo	E:\CLLJA-20150124(JMV1.1)\define.h	161;"	p	line:161	signature:(void)
+Rx_Testinfo	E:\CLLJA-20150124(JMV1.1)\device.c	560;"	f	line:560
+Rx_infpack	E:\CLLJA-20150124(JMV1.1)\define.h	160;"	p	line:160	signature:(uint)
+Rx_infpack	E:\CLLJA-20150124(JMV1.1)\device.c	121;"	f	line:121	signature:(uint temp_block)
+Rxpack	E:\CLLJA-20150124(JMV1.1)\define.h	159;"	p	line:159	signature:(uint)
+Rxpack	E:\CLLJA-20150124(JMV1.1)\device.c	142;"	f	line:142	signature:(uint temp_block)
+SCK::PORTBbits.RB1	E:\CLLJA-20150124(JMV1.1)\define.h	66;"	d	line:66
+SCK_TRIS::TRISBbits.TRISB1	E:\CLLJA-20150124(JMV1.1)\define.h	67;"	d	line:67
+SHANG	E:\CLLJA-20150124(JMV1.1)\main.c	551;"	l	line:551
+SHANG_temp	E:\CLLJA-20150124(JMV1.1)\main.c	551;"	l	line:551
+SHDN::PORTAbits.RA5	E:\CLLJA-20150124(JMV1.1)\define.h	42;"	d	line:42
+SHDN_TRIS::TRISAbits.TRISA5	E:\CLLJA-20150124(JMV1.1)\define.h	43;"	d	line:43
+Sample_flag	E:\CLLJA-20150124(JMV1.1)\main.c	550;"	l	line:550
+Sample_save	E:\CLLJA-20150124(JMV1.1)\define.h	167;"	p	line:167	signature:(void)
+Sample_save	E:\CLLJA-20150124(JMV1.1)\device.c	1202;"	f	line:1202	signature:(void)
+Send_IDinfo	E:\CLLJA-20150124(JMV1.1)\define.h	166;"	p	line:166	signature:(void)
+Send_IDinfo	E:\CLLJA-20150124(JMV1.1)\device.c	47;"	f	line:47
+Send_data	E:\CLLJA-20150124(JMV1.1)\define.h	163;"	p	line:163	signature:(void)
+Send_data	E:\CLLJA-20150124(JMV1.1)\device.c	433;"	f	line:433	signature:(void)
+Send_davrf	E:\CLLJA-20150124(JMV1.1)\device.c	77;"	f	line:77	signature:(uchar N)
+Send_testinfo	E:\CLLJA-20150124(JMV1.1)\define.h	165;"	p	line:165	signature:(void)
+Send_testinfo	E:\CLLJA-20150124(JMV1.1)\device.c	545;"	f	line:545	signature:(void)
+Send_vrf	E:\CLLJA-20150124(JMV1.1)\define.h	156;"	p	line:156	signature:(uchar)
+Send_vrf	E:\CLLJA-20150124(JMV1.1)\device.c	33;"	f	line:33	signature:(uchar N)
+Single_point	E:\CLLJA-20150124(JMV1.1)\define.h	162;"	p	line:162	signature:(void)
+Single_point	E:\CLLJA-20150124(JMV1.1)\device.c	163;"	f	line:163	signature:(void)
+Sleep_forever	E:\CLLJA-20150124(JMV1.1)\define.h	170;"	p	line:170	signature:(void)
+Sleep_forever	E:\CLLJA-20150124(JMV1.1)\device.c	1346;"	f	line:1346	signature:(void)
+SpiDF321_InByte	E:\CLLJA-20150124(JMV1.1)\define.h	203;"	p	line:203	signature:(void)
+SpiDF321_InByte	E:\CLLJA-20150124(JMV1.1)\device.c	594;"	f	line:594	signature:(void)
+SpiDF321_OutByte	E:\CLLJA-20150124(JMV1.1)\define.h	202;"	p	line:202	signature:(uchar)
+SpiDF321_OutByte	E:\CLLJA-20150124(JMV1.1)\device.c	579;"	f	line:579	signature:(uchar b)
+T1H	E:\CLLJA-20150124(JMV1.1)\main.c	550;"	l	line:550
+T1_flag	E:\CLLJA-20150124(JMV1.1)\main.c	11;"	v	line:11
+TESTMODE_addr::0XF8	E:\CLLJA-20150124(JMV1.1)\define.h	33;"	d	line:33
+TX_TRIS::TRISCbits.TRISC6	E:\CLLJA-20150124(JMV1.1)\define.h	45;"	d	line:45
+Test0_mode	E:\CLLJA-20150124(JMV1.1)\define.h	142;"	p	line:142	signature:(void)
+Test0_mode	E:\CLLJA-20150124(JMV1.1)\main.c	548;"	f	line:548	signature:(void)
+Test_mode	E:\CLLJA-20150124(JMV1.1)\define.h	141;"	p	line:141	signature:(void)
+Test_mode	E:\CLLJA-20150124(JMV1.1)\main.c	315;"	f	line:315	signature:(void)
+Testinfo	E:\CLLJA-20150124(JMV1.1)\define.h	114;"	s	line:114
+Timetab_addr::0X2000	E:\CLLJA-20150124(JMV1.1)\define.h	11;"	d	line:11
+Timetab_block::2	E:\CLLJA-20150124(JMV1.1)\define.h	10;"	d	line:10
+Tx	E:\CLLJA-20150124(JMV1.1)\define.h	153;"	p	line:153	signature:(uchar)
+Tx	E:\CLLJA-20150124(JMV1.1)\device.c	19;"	f	line:19	signature:(uchar ch)
+Txblockpack	E:\CLLJA-20150124(JMV1.1)\define.h	158;"	p	line:158	signature:(void)
+Txblockpack	E:\CLLJA-20150124(JMV1.1)\device.c	104;"	f	line:104	signature:(void)
+Txpack	E:\CLLJA-20150124(JMV1.1)\define.h	157;"	p	line:157	signature:(uint)
+Txpack	E:\CLLJA-20150124(JMV1.1)\device.c	91;"	f	line:91	signature:(uint temp_block)
+Vbat1_addr::0X12	E:\CLLJA-20150124(JMV1.1)\define.h	25;"	d	line:25
+Vbat_excursion	E:\CLLJA-20150124(JMV1.1)\main.c	9;"	v	line:9
+Vbatpoint	E:\CLLJA-20150124(JMV1.1)\device.c	254;"	l	line:254
+Vbattab_addr::0X4000	E:\CLLJA-20150124(JMV1.1)\define.h	15;"	d	line:15
+Vbattab_block::4	E:\CLLJA-20150124(JMV1.1)\define.h	14;"	d	line:14
+W2550	E:\CLLJA-20150124(JMV1.1)\define.h	175;"	p	line:175	signature:(uchar,uchar)
+W2550	E:\CLLJA-20150124(JMV1.1)\device.c	804;"	f	line:804	signature:(uchar temp_addr,uchar data)
+WW2550	E:\CLLJA-20150124(JMV1.1)\define.h	176;"	p	line:176	signature:(uchar,uchar)
+WW2550	E:\CLLJA-20150124(JMV1.1)\device.c	797;"	f	line:797	signature:(uchar temp_addr,uchar data)
+Well1_addr::0X10	E:\CLLJA-20150124(JMV1.1)\define.h	24;"	d	line:24
+Well_addr::0XF0	E:\CLLJA-20150124(JMV1.1)\define.h	26;"	d	line:26
+WriteAD8343	E:\CLLJA-20150124(JMV1.1)\define.h	181;"	p	line:181	signature:(uchar)
+WriteAD8343	E:\CLLJA-20150124(JMV1.1)\device.c	839;"	f	line:839	signature:(uchar b)
+Write_DF321page	E:\CLLJA-20150124(JMV1.1)\define.h	211;"	p	line:211	signature:(uint,uint,uint, uchar *)
+Write_DF321page	E:\CLLJA-20150124(JMV1.1)\device.c	714;"	f	line:714	signature:(uint block,uint excursion,uint mLen,uchar *mBuf)
+Write_EN	E:\CLLJA-20150124(JMV1.1)\define.h	205;"	p	line:205	signature:(uint)
+Write_EN	E:\CLLJA-20150124(JMV1.1)\device.c	609;"	f	line:609	signature:(uint block)
+Write_Flash_unpro	E:\CLLJA-20150124(JMV1.1)\define.h	208;"	p	line:208	signature:(uint)
+Write_Flash_unpro	E:\CLLJA-20150124(JMV1.1)\device.c	634;"	f	line:634	signature:(uint block)
+YU	E:\CLLJA-20150124(JMV1.1)\main.c	550;"	l	line:550
+YULIU	E:\CLLJA-20150124(JMV1.1)\define.h	128;"	m	line:128	struct:Testinfo
+YULIU_addr::0XFF	E:\CLLJA-20150124(JMV1.1)\define.h	38;"	d	line:38
+adjzero	E:\CLLJA-20150124(JMV1.1)\define.h	125;"	m	line:125	struct:Testinfo
+b	E:\CLLJA-20150124(JMV1.1)\device.c	596;"	l	line:596
+b	E:\CLLJA-20150124(JMV1.1)\device.c	622;"	l	line:622
+b	E:\CLLJA-20150124(JMV1.1)\device.c	716;"	l	line:716
+b	E:\CLLJA-20150124(JMV1.1)\device.c	751;"	l	line:751
+b	E:\CLLJA-20150124(JMV1.1)\device.c	822;"	l	line:822
+big_block	E:\CLLJA-20150124(JMV1.1)\device.c	251;"	l	line:251
+big_index	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250
+blo_num	E:\CLLJA-20150124(JMV1.1)\device.c	481;"	l	line:481
+block	E:\CLLJA-20150124(JMV1.1)\device.c	701;"	l	line:701
+blockaddr	E:\CLLJA-20150124(JMV1.1)\device.c	480;"	l	line:480
+blockno	E:\CLLJA-20150124(JMV1.1)\device.c	108;"	l	line:108
+blockno	E:\CLLJA-20150124(JMV1.1)\device.c	50;"	l	line:50
+bn	E:\CLLJA-20150124(JMV1.1)\device.c	1205;"	l	line:1205
+bn	E:\CLLJA-20150124(JMV1.1)\device.c	254;"	l	line:254
+bn	E:\CLLJA-20150124(JMV1.1)\device.c	435;"	l	line:435
+bn	E:\CLLJA-20150124(JMV1.1)\device.c	479;"	l	line:479
+bn	E:\CLLJA-20150124(JMV1.1)\main.c	319;"	l	line:319
+ch2	E:\CLLJA-20150124(JMV1.1)\define.h	91;"	m	line:91	union:Lch2
+ch3	E:\CLLJA-20150124(JMV1.1)\define.h	96;"	m	line:96	union:Lch3
+ch4	E:\CLLJA-20150124(JMV1.1)\define.h	101;"	m	line:101	union:Lch4
+ch8	E:\CLLJA-20150124(JMV1.1)\define.h	110;"	m	line:110	union:Lch8
+count	E:\CLLJA-20150124(JMV1.1)\define.h	121;"	m	line:121	struct:Testinfo
+data	E:\CLLJA-20150124(JMV1.1)\define.h	133;"	m	line:133	union:Allinfo
+data74	E:\CLLJA-20150124(JMV1.1)\main.c	10;"	v	line:10
+err	E:\CLLJA-20150124(JMV1.1)\device.c	478;"	l	line:478
+err_addr::0X0000	E:\CLLJA-20150124(JMV1.1)\define.h	7;"	d	line:7
+err_block::0	E:\CLLJA-20150124(JMV1.1)\define.h	6;"	d	line:6
+errnum	E:\CLLJA-20150124(JMV1.1)\device.c	479;"	l	line:479
+go_on	E:\CLLJA-20150124(JMV1.1)\main.c	550;"	l	line:550
+high_ISR	E:\CLLJA-20150124(JMV1.1)\main.c	18;"	f	line:18	signature:(void)
+i	E:\CLLJA-20150124(JMV1.1)\device.c	106;"	l	line:106
+i	E:\CLLJA-20150124(JMV1.1)\device.c	123;"	l	line:123
+i	E:\CLLJA-20150124(JMV1.1)\device.c	13;"	l	line:13
+i	E:\CLLJA-20150124(JMV1.1)\device.c	144;"	l	line:144
+i	E:\CLLJA-20150124(JMV1.1)\device.c	165;"	l	line:165
+i	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250
+i	E:\CLLJA-20150124(JMV1.1)\device.c	35;"	l	line:35
+i	E:\CLLJA-20150124(JMV1.1)\device.c	478;"	l	line:478
+i	E:\CLLJA-20150124(JMV1.1)\device.c	49;"	l	line:49
+i	E:\CLLJA-20150124(JMV1.1)\device.c	547;"	l	line:547
+i	E:\CLLJA-20150124(JMV1.1)\device.c	562;"	l	line:562
+i	E:\CLLJA-20150124(JMV1.1)\device.c	581;"	l	line:581
+i	E:\CLLJA-20150124(JMV1.1)\device.c	596;"	l	line:596
+i	E:\CLLJA-20150124(JMV1.1)\device.c	5;"	l	line:5
+i	E:\CLLJA-20150124(JMV1.1)\device.c	692;"	l	line:692
+i	E:\CLLJA-20150124(JMV1.1)\device.c	79;"	l	line:79
+i	E:\CLLJA-20150124(JMV1.1)\device.c	821;"	l	line:821
+i	E:\CLLJA-20150124(JMV1.1)\device.c	93;"	l	line:93
+i	E:\CLLJA-20150124(JMV1.1)\main.c	193;"	l	line:193
+i	E:\CLLJA-20150124(JMV1.1)\main.c	317;"	l	line:317
+info	E:\CLLJA-20150124(JMV1.1)\define.h	134;"	m	line:134	union:Allinfo
+interval	E:\CLLJA-20150124(JMV1.1)\define.h	105;"	m	line:105	struct:Inter_loop
+j	E:\CLLJA-20150124(JMV1.1)\device.c	107;"	l	line:107
+j	E:\CLLJA-20150124(JMV1.1)\device.c	124;"	l	line:124
+j	E:\CLLJA-20150124(JMV1.1)\device.c	145;"	l	line:145
+j	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250
+j	E:\CLLJA-20150124(JMV1.1)\device.c	479;"	l	line:479
+j	E:\CLLJA-20150124(JMV1.1)\device.c	563;"	l	line:563
+j	E:\CLLJA-20150124(JMV1.1)\device.c	6;"	l	line:6
+j	E:\CLLJA-20150124(JMV1.1)\device.c	94;"	l	line:94
+j	E:\CLLJA-20150124(JMV1.1)\main.c	319;"	l	line:319
+k	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250
+k	E:\CLLJA-20150124(JMV1.1)\device.c	581;"	l	line:581
+k	E:\CLLJA-20150124(JMV1.1)\device.c	596;"	l	line:596
+k	E:\CLLJA-20150124(JMV1.1)\device.c	821;"	l	line:821
+l	E:\CLLJA-20150124(JMV1.1)\define.h	100;"	m	line:100	union:Lch4
+l	E:\CLLJA-20150124(JMV1.1)\define.h	90;"	m	line:90	union:Lch2
+l	E:\CLLJA-20150124(JMV1.1)\define.h	95;"	m	line:95	union:Lch3
+loop_point	E:\CLLJA-20150124(JMV1.1)\define.h	119;"	m	line:119	struct:Testinfo
+looptime	E:\CLLJA-20150124(JMV1.1)\define.h	106;"	m	line:106	struct:Inter_loop
+main	E:\CLLJA-20150124(JMV1.1)\main.c	47;"	f	line:47	signature:(void)
+mem_num	E:\CLLJA-20150124(JMV1.1)\define.h	124;"	m	line:124	struct:Testinfo
+memnum_addr::0XF9	E:\CLLJA-20150124(JMV1.1)\define.h	34;"	d	line:34
+mm	E:\CLLJA-20150124(JMV1.1)\main.c	317;"	l	line:317
+nn	E:\CLLJA-20150124(JMV1.1)\device.c	1204;"	l	line:1204
+num	E:\CLLJA-20150124(JMV1.1)\device.c	478;"	l	line:478
+p_gain	E:\CLLJA-20150124(JMV1.1)\define.h	122;"	m	line:122	struct:Testinfo
+packnum	E:\CLLJA-20150124(JMV1.1)\device.c	437;"	l	line:437
+para	E:\CLLJA-20150124(JMV1.1)\main.c	7;"	v	line:7
+pnormal	E:\CLLJA-20150124(JMV1.1)\main.c	321;"	l	line:321
+pnormal	E:\CLLJA-20150124(JMV1.1)\main.c	552;"	l	line:552
+pointbyte	E:\CLLJA-20150124(JMV1.1)\define.h	127;"	m	line:127	struct:Testinfo
+pointbyte_addr::0XFE	E:\CLLJA-20150124(JMV1.1)\define.h	37;"	d	line:37
+points	E:\CLLJA-20150124(JMV1.1)\define.h	118;"	m	line:118	struct:Testinfo
+resetAD8343	E:\CLLJA-20150124(JMV1.1)\define.h	182;"	p	line:182	signature:(void)
+resetAD8343	E:\CLLJA-20150124(JMV1.1)\device.c	936;"	f	line:936	signature:(void)
+sj	E:\CLLJA-20150124(JMV1.1)\device.c	1030;"	l	line:1030
+sum	E:\CLLJA-20150124(JMV1.1)\device.c	1005;"	l	line:1005
+sum	E:\CLLJA-20150124(JMV1.1)\device.c	1030;"	l	line:1030
+sum	E:\CLLJA-20150124(JMV1.1)\device.c	1065;"	l	line:1065
+sum	E:\CLLJA-20150124(JMV1.1)\device.c	1123;"	l	line:1123
+sum	E:\CLLJA-20150124(JMV1.1)\device.c	980;"	l	line:980
+t1normal	E:\CLLJA-20150124(JMV1.1)\main.c	321;"	l	line:321
+tab	E:\CLLJA-20150124(JMV1.1)\define.h	111;"	m	line:111	union:Lch8
+te_mode	E:\CLLJA-20150124(JMV1.1)\define.h	123;"	m	line:123	struct:Testinfo
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	1204;"	l	line:1204
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	26;"	l	line:26
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	435;"	l	line:435
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	547;"	l	line:547
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	636;"	l	line:636
+temp	E:\CLLJA-20150124(JMV1.1)\device.c	790;"	l	line:790
+temp	E:\CLLJA-20150124(JMV1.1)\main.c	317;"	l	line:317
+temp	E:\CLLJA-20150124(JMV1.1)\main.c	49;"	l	line:49
+temp	E:\CLLJA-20150124(JMV1.1)\main.c	550;"	l	line:550
+temp_addr	E:\CLLJA-20150124(JMV1.1)\device.c	752;"	l	line:752
+temp_addr	E:\CLLJA-20150124(JMV1.1)\device.c	759;"	l	line:759
+temp_block	E:\CLLJA-20150124(JMV1.1)\device.c	107;"	l	line:107
+temp_value	E:\CLLJA-20150124(JMV1.1)\device.c	1207;"	l	line:1207
+tempnum	E:\CLLJA-20150124(JMV1.1)\device.c	752;"	l	line:752
+tempnum	E:\CLLJA-20150124(JMV1.1)\device.c	764;"	l	line:764
+temppoint	E:\CLLJA-20150124(JMV1.1)\device.c	252;"	l	line:252
+time	E:\CLLJA-20150124(JMV1.1)\main.c	553;"	l	line:553
+time_value	E:\CLLJA-20150124(JMV1.1)\device.c	1207;"	l	line:1207
+tnormal	E:\CLLJA-20150124(JMV1.1)\main.c	321;"	l	line:321
+ts	E:\CLLJA-20150124(JMV1.1)\device.c	1204;"	l	line:1204
+tus	E:\CLLJA-20150124(JMV1.1)\device.c	1037;"	l	line:1037
+tus	E:\CLLJA-20150124(JMV1.1)\device.c	1084;"	l	line:1084
+uchar::unsignedchar	E:\CLLJA-20150124(JMV1.1)\define.h	84;"	d	line:84
+uint::unsignedint	E:\CLLJA-20150124(JMV1.1)\define.h	85;"	d	line:85
+ulong::unsignedlong	E:\CLLJA-20150124(JMV1.1)\define.h	87;"	d	line:87
+uslong::unsignedshortlong	E:\CLLJA-20150124(JMV1.1)\define.h	86;"	d	line:86
+valid_block	E:\CLLJA-20150124(JMV1.1)\main.c	8;"	v	line:8
+valid_excursion	E:\CLLJA-20150124(JMV1.1)\main.c	9;"	v	line:9
+value	E:\CLLJA-20150124(JMV1.1)\main.c	6;"	v	line:6
+well	E:\CLLJA-20150124(JMV1.1)\define.h	117;"	m	line:117	struct:Testinfo
+well_info	E:\CLLJA-20150124(JMV1.1)\define.h	116;"	m	line:116	struct:Testinfo
+yj	E:\CLLJA-20150124(JMV1.1)\device.c	1205;"	l	line:1205
+yy	E:\CLLJA-20150124(JMV1.1)\device.c	1204;"	l	line:1204
+yy	E:\CLLJA-20150124(JMV1.1)\device.c	165;"	l	line:165
+yy	E:\CLLJA-20150124(JMV1.1)\device.c	250;"	l	line:250

@@ -1,0 +1,4372 @@
+                        .module main.c
+                        .area text(rom, con, rel)
+ 0000                   .dbfile main.c
+ 0000                   .dbfile D:\chen\Core\FirmWare_CT\CT_MOTOR_V30\main.c
+ 0000                   .dbfunc e InitialIO _InitialIO fV
+                        .even
+ 0000           _InitialIO::
+ 0000                   .dbline -1
+ 0000                   .dbline 99
+ 0000           ; 
+ 0000           ; #include <iom128v.h>                                                                  
+ 0000           ; #include <macros.h>
+ 0000           ; #include <stdio.h>
+ 0000           ; 
+ 0000           ;  //20170703
+ 0000           ;  //适应新做的电机板,R2改为30K
+ 0000           ;  
+ 0000           ; #define  BB     0x10        //固件版本号
+ 0000           ; 
+ 0000           ; #define INT_EN                { SEI(); }
+ 0000           ; #define INT_DIS               { CLI(); }
+ 0000           ;  
+ 0000           ; //电机管脚定义
+ 0000           ; #define MT1_P1_Set()     (PORTG |= (1<<PORTG1))  
+ 0000           ; #define MT1_P1_Clr()     (PORTG &= ~(1<<PORTG1)) 
+ 0000           ; #define MT1_N1_Set()     (PORTG |= (1<<PORTG0))  
+ 0000           ; #define MT1_N1_Clr()     (PORTG &= ~(1<<PORTG0)) 
+ 0000           ; #define MT1_P2_Set()     (PORTD |= (1<<PORTD6))  
+ 0000           ; #define MT1_P2_Clr()     (PORTD &= ~(1<<PORTD6)) 
+ 0000           ; #define MT1_N2_Set()     (PORTD |= (1<<PORTD7))  
+ 0000           ; #define MT1_N2_Clr()     (PORTD &= ~(1<<PORTD7)) 
+ 0000           ; 
+ 0000           ; #define MT2_P1_Set()     (PORTA |= (1<<PORTA4))  
+ 0000           ; #define MT2_P1_Clr()     (PORTA &= ~(1<<PORTA4)) 
+ 0000           ; #define MT2_N1_Set()     (PORTA |= (1<<PORTA5))  
+ 0000           ; #define MT2_N1_Clr()     (PORTA &= ~(1<<PORTA5)) 
+ 0000           ; #define MT2_P2_Set()     (PORTA |= (1<<PORTA2))  
+ 0000           ; #define MT2_P2_Clr()     (PORTA &= ~(1<<PORTA2)) 
+ 0000           ; #define MT2_N2_Set()     (PORTA |= (1<<PORTA3))  
+ 0000           ; #define MT2_N2_Clr()     (PORTA &= ~(1<<PORTA3)) 
+ 0000           ; 
+ 0000           ; 
+ 0000           ; //电机电源
+ 0000           ; #define VM_Open()        (PORTA |= (1<<PORTA6))
+ 0000           ; #define VM_Close()       (PORTA &= ~(1<<PORTA6)) 
+ 0000           ; 
+ 0000           ; //同时关二个电机
+ 0000           ; #define MOTORSTOP   {MT1_P2_Clr();MT1_N2_Clr();MT2_P2_Clr();MT2_N2_Clr();VM_Close();MT1_P1_Clr();MT1_N1_Clr();MT2_P1_Clr();MT2_N1_Clr();}
+ 0000           ; 
+ 0000           ; #define DELAY10 for(Tt=0;Tt<4;Tt++);
+ 0000           ; #define DELAY20 for(Tt=0;Tt<4;Tt++);
+ 0000           ; #define DELAY40 for(Tt=0;Tt<16;Tt++); 
+ 0000           ; #define DELAY50 for(Tt=0;Tt<21;Tt++); 
+ 0000           ; #define DELAY80 for(Tt=0;Tt<32;Tt++); 
+ 0000           ; #define DELAY89 for(Tt=0;Tt<36;Tt++); 
+ 0000           ; #define DELAY100 for(Tt=0;Tt<42;Tt++); 
+ 0000           ; #define DELAY170 for(Tt=0;Tt<72;Tt++);
+ 0000           ; #define DELAY268 for(Tt=0;Tt<113;Tt++);
+ 0000           ; #define DELAY397 for(Tt=0;Tt<165;Tt++);
+ 0000           ; #define DELAY400 for(Tt=0;Tt<168;Tt++);
+ 0000           ; #define DELAY500 for(Tt=0;Tt<210;Tt++);
+ 0000           ; 
+ 0000           ; union FIB
+ 0000           ; {
+ 0000           ;  float f;
+ 0000           ;  unsigned int i[2];
+ 0000           ;  unsigned char b[4];
+ 0000           ; }myFIB;
+ 0000           ; 
+ 0000           ; union MotorStatus
+ 0000           ; {
+ 0000           ;  unsigned int i;
+ 0000           ;  struct 
+ 0000           ;  { 
+ 0000           ;    unsigned int RUN:1;//bit0,电机运行状态，0：停止，1：运行
+ 0000           ;    unsigned int DIR:1;//bit1,电机运行方向，0：反转,收臂-调大(DIR_L)，1：正转,张臂-调小(DIR_H)
+ 0000           ;    unsigned int BrokenStop:1;//bit2, 断路停
+ 0000           ;    unsigned int CommandStop:1;//bit3,手动停
+ 0000           ;    unsigned int OverCurrent:1;//bit4,过流停
+ 0000           ;    unsigned int UnderVoltage:1;//bit5,欠压停
+ 0000           ;    unsigned int StartResult:2;//bit6-bit7,电机最近一次启动结果(0：正常上电启动，1：本电机同向运行，2：本电机反向运行，3：另一个电机正在运行)
+ 0000           ;    
+ 0000           ;    unsigned int ThisCurrent:8;//bit8-bit15 ,  电机当前或停止前最近一次电流
+ 0000           ;  }s;
+ 0000           ; }Motor1Status,Motor2Status;//电机状态
+ 0000           ; 
+ 0000           ; unsigned char Motor1Gear,Motor2Gear;// 电机过流档位
+ 0000           ; unsigned char Motor1Thr,Motor2Thr;//电机堵转过流阈值
+ 0000           ; unsigned char MotorIdelGear;//电机断路档位
+ 0000           ; unsigned char MotorIdelCur;// 电机断路电流
+ 0000           ; unsigned char R_dat; 
+ 0000           ; unsigned char IntFlag;
+ 0000           ; unsigned char Tt;
+ 0000           ; 
+ 0000           ; 
+ 0000           ; void InitialIO(void);
+ 0000           ; void Pwm_startup(unsigned char motor);
+ 0000           ; void Start(void);
+ 0000           ; unsigned char SampleADC(unsigned char ch);
+ 0000           ; void EEPROM_write(unsigned int Address,unsigned char Data);
+ 0000           ; unsigned char EEPROM_read(unsigned int Address);
+ 0000           ; void CheckMotor(unsigned int t);
+ 0000           ; void Gear2Thr(void);
+ 0000           ; void uart1_rx_isr(void);
+ 0000           ; void SendUart1(unsigned char dat);
+ 0000           ; 
+ 0000           ; void InitialIO(void)
+ 0000           ; {//1输出，0输入
+ 0000                   .dbline 100
+ 0000           ;  PORTA=0x00;
+ 0000 2224              clr R2
+ 0002 2BBA              out 0x1b,R2
+ 0004                   .dbline 101
+ 0004           ;  DDRA=0x7c;  
+ 0004 8CE7              ldi R24,124
+ 0006 8ABB              out 0x1a,R24
+ 0008                   .dbline 103
+ 0008           ; 
+ 0008           ;  PORTD=0x00; 
+ 0008 22BA              out 0x12,R2
+ 000A                   .dbline 104
+ 000A           ;  DDRD=0xc0; 
+ 000A 80EC              ldi R24,192
+ 000C 81BB              out 0x11,R24
+ 000E                   .dbline 106
+ 000E           ; 
+ 000E           ;  PORTG=0x00; 
+ 000E 20926500          sts 101,R2
+ 0012                   .dbline 107
+ 0012           ;  DDRG=0x03; 
+ 0012 83E0              ldi R24,3
+ 0014 80936400          sts 100,R24
+ 0018                   .dbline -2
+ 0018           L2:
+ 0018                   .dbline 0 ; func end
+ 0018 0895              ret
+ 001A                   .dbend
+ 001A                   .dbfunc e uart1_init _uart1_init fV
+                        .even
+ 001A           _uart1_init::
+ 001A                   .dbline -1
+ 001A                   .dbline 117
+ 001A           ; }
+ 001A           ; 
+ 001A           ; 
+ 001A           ; //UART1 initialize
+ 001A           ; // desired baud rate:9600
+ 001A           ; // actual baud rate:9615 (0.2%)
+ 001A           ; // char size: 8 bit
+ 001A           ; // parity: Disabled
+ 001A           ; void uart1_init(void)
+ 001A           ; {
+ 001A                   .dbline 118
+ 001A           ;  UCSR1B = 0x00; //disable while setting baud rate
+ 001A 2224              clr R2
+ 001C 20929A00          sts 154,R2
+ 0020                   .dbline 119
+ 0020           ;  UCSR1A = 0x02;
+ 0020 82E0              ldi R24,2
+ 0022 80939B00          sts 155,R24
+ 0026                   .dbline 120
+ 0026           ;  UCSR1C = 0x06;
+ 0026 86E0              ldi R24,6
+ 0028 80939D00          sts 157,R24
+ 002C                   .dbline 121
+ 002C           ;  UBRR1L = 0x67; //set baud rate lo
+ 002C 87E6              ldi R24,103
+ 002E 80939900          sts 153,R24
+ 0032                   .dbline 122
+ 0032           ;  UBRR1H = 0x00; //set baud rate hi
+ 0032 20929800          sts 152,R2
+ 0036                   .dbline 123
+ 0036           ;  UCSR1B = 0x98;
+ 0036 88E9              ldi R24,152
+ 0038 80939A00          sts 154,R24
+ 003C                   .dbline -2
+ 003C           L3:
+ 003C                   .dbline 0 ; func end
+ 003C 0895              ret
+ 003E                   .dbend
+                        .area vector(rom, abs)
+                        .org 120
+ 0078 0C941F00          jmp _uart1_rx_isr
+                        .area text(rom, con, rel)
+ 003E                   .dbfile D:\chen\Core\FirmWare_CT\CT_MOTOR_V30\main.c
+ 003E                   .dbfunc e uart1_rx_isr _uart1_rx_isr fV
+                        .even
+ 003E           _uart1_rx_isr::
+ 003E 2A92              st -y,R2
+ 0040 8A93              st -y,R24
+ 0042 2FB6              IN R2,63
+ 0044 2A92              st -y,R2
+ 0046                   .dbline -1
+ 0046                   .dbline 128
+ 0046           ; }
+ 0046           ; 
+ 0046           ; #pragma interrupt_handler uart1_rx_isr:iv_USART1_RXC
+ 0046           ; void uart1_rx_isr(void)//串口1接收中断
+ 0046           ; {
+ 0046                   .dbline 129
+ 0046           ;   R_dat=UDR1;
+ 0046 20909C00          lds R2,156
+ 004A 20920200          sts _R_dat,R2
+ 004E                   .dbline 130
+ 004E           ;   IntFlag=1;
+ 004E 81E0              ldi R24,1
+ 0050 80930100          sts _IntFlag,R24
+ 0054                   .dbline -2
+ 0054           L4:
+ 0054                   .dbline 0 ; func end
+ 0054 2990              ld R2,y+
+ 0056 2FBE              OUT 63,R2
+ 0058 8991              ld R24,y+
+ 005A 2990              ld R2,y+
+ 005C 1895              reti
+ 005E                   .dbend
+ 005E                   .dbfunc e SendUart1 _SendUart1 fV
+ 005E           ;            dat -> R16
+                        .even
+ 005E           _SendUart1::
+ 005E                   .dbline -1
+ 005E                   .dbline 134
+ 005E           ; }
+ 005E           ; 
+ 005E           ; void SendUart1(unsigned char dat)
+ 005E           ; {
+ 005E           L6:
+ 005E                   .dbline 135
+ 005E           ;   while(!(UCSR1A&(1<<UDRE1)));   // 等待发送缓冲器为空
+ 005E           L7:
+ 005E                   .dbline 135
+ 005E 20909B00          lds R2,155
+ 0062 25FE              sbrs R2,5
+ 0064 FCCF              rjmp L6
+ 0066           X0:
+ 0066                   .dbline 136
+ 0066           ;   UDR1=dat;  
+ 0066 00939C00          sts 156,R16
+ 006A                   .dbline -2
+ 006A           L5:
+ 006A                   .dbline 0 ; func end
+ 006A 0895              ret
+ 006C                   .dbsym r dat 16 c
+ 006C                   .dbend
+                        .area vector(rom, abs)
+                        .org 116
+ 0074 0C943600          jmp _timer3_ovf_isr
+                        .area text(rom, con, rel)
+ 006C                   .dbfile D:\chen\Core\FirmWare_CT\CT_MOTOR_V30\main.c
+ 006C                   .dbfunc e timer3_ovf_isr _timer3_ovf_isr fV
+                        .even
+ 006C           _timer3_ovf_isr::
+ 006C 2A92              st -y,R2
+ 006E 8A93              st -y,R24
+ 0070 9A93              st -y,R25
+ 0072 AA93              st -y,R26
+ 0074 EA93              st -y,R30
+ 0076 2FB6              IN R2,63
+ 0078 2A92              st -y,R2
+ 007A                   .dbline -1
+ 007A                   .dbline 142
+ 007A           ; }
+ 007A           ; 
+ 007A           ; 
+ 007A           ; #pragma interrupt_handler timer3_ovf_isr:iv_TIM3_OVF
+ 007A           ; void timer3_ovf_isr(void)//微调时用这个定时中断来自动关电机
+ 007A           ; {
+ 007A                   .dbline 143
+ 007A           ;       ETIMSK = 0x00; //Timer3中断关闭
+ 007A 2224              clr R2
+ 007C 20927D00          sts 125,R2
+ 0080                   .dbline 144
+ 0080           ;       TCCR3B = 0x00; //stop
+ 0080 20928A00          sts 138,R2
+ 0084                   .dbline 146
+ 0084           ;        
+ 0084           ;       MOTORSTOP  //关电机
+ 0084                   .dbline 146
+ 0084 9698              cbi 0x12,6
+ 0086                   .dbline 146
+ 0086 9798              cbi 0x12,7
+ 0088                   .dbline 146
+ 0088 DA98              cbi 0x1b,2
+ 008A                   .dbline 146
+ 008A DB98              cbi 0x1b,3
+ 008C                   .dbline 146
+ 008C DE98              cbi 0x1b,6
+ 008E                   .dbline 146
+ 008E 80916500          lds R24,101
+ 0092 8D7F              andi R24,253
+ 0094 80936500          sts 101,R24
+ 0098                   .dbline 146
+ 0098 80916500          lds R24,101
+ 009C 8E7F              andi R24,254
+ 009E 80936500          sts 101,R24
+ 00A2                   .dbline 146
+ 00A2 DC98              cbi 0x1b,4
+ 00A4                   .dbline 146
+ 00A4 DD98              cbi 0x1b,5
+ 00A6                   .dbline 146
+ 00A6                   .dbline 148
+ 00A6           ;               
+ 00A6           ;     if(Motor1Status.s.RUN==1)//收放电机正在运行
+ 00A6 80910B00          lds R24,_Motor1Status
+ 00AA 90910C00          lds R25,_Motor1Status+1
+ 00AE 8170              andi R24,1
+ 00B0 9070              andi R25,0
+ 00B2 8130              cpi R24,1
+ 00B4 E0E0              ldi R30,0
+ 00B6 9E07              cpc R25,R30
+ 00B8 71F4              brne L10
+ 00BA           X1:
+ 00BA                   .dbline 149
+ 00BA           ;       {
+ 00BA                   .dbline 150
+ 00BA           ;               Motor1Status.s.RUN=0;
+ 00BA 80910B00          lds R24,_Motor1Status
+ 00BE 90910C00          lds R25,_Motor1Status+1
+ 00C2 8E7F              andi R24,254
+ 00C4 90930C00          sts _Motor1Status+1,R25
+ 00C8 80930B00          sts _Motor1Status,R24
+ 00CC                   .dbline 151
+ 00CC           ;               Motor1Status.s.CommandStop=1;
+ 00CC 8860              ori R24,8
+ 00CE 90930C00          sts _Motor1Status+1,R25
+ 00D2 80930B00          sts _Motor1Status,R24
+ 00D6                   .dbline 152
+ 00D6           ;       }
+ 00D6           L10:
+ 00D6                   .dbline 154
+ 00D6           ;       
+ 00D6           ;       if(Motor2Status.s.RUN==1)//调节电机正在运行
+ 00D6 80910900          lds R24,_Motor2Status
+ 00DA 90910A00          lds R25,_Motor2Status+1
+ 00DE 8170              andi R24,1
+ 00E0 9070              andi R25,0
+ 00E2 8130              cpi R24,1
+ 00E4 E0E0              ldi R30,0
+ 00E6 9E07              cpc R25,R30
+ 00E8 71F4              brne L12
+ 00EA           X2:
+ 00EA                   .dbline 155
+ 00EA           ;       { 
+ 00EA                   .dbline 156
+ 00EA           ;               Motor2Status.s.RUN=0;
+ 00EA 80910900          lds R24,_Motor2Status
+ 00EE 90910A00          lds R25,_Motor2Status+1
+ 00F2 8E7F              andi R24,254
+ 00F4 90930A00          sts _Motor2Status+1,R25
+ 00F8 80930900          sts _Motor2Status,R24
+ 00FC                   .dbline 157
+ 00FC           ;               Motor2Status.s.CommandStop=1;
+ 00FC 8860              ori R24,8
+ 00FE 90930A00          sts _Motor2Status+1,R25
+ 0102 80930900          sts _Motor2Status,R24
+ 0106                   .dbline 158
+ 0106           ;       }            
+ 0106           L12:
+ 0106                   .dbline -2
+ 0106           L9:
+ 0106                   .dbline 0 ; func end
+ 0106 2990              ld R2,y+
+ 0108 2FBE              OUT 63,R2
+ 010A E991              ld R30,y+
+ 010C A991              ld R26,y+
+ 010E 9991              ld R25,y+
+ 0110 8991              ld R24,y+
+ 0112 2990              ld R2,y+
+ 0114 1895              reti
+ 0116                   .dbend
+ 0116                   .dbfunc e Pwm_startup _Pwm_startup fV
+ 0116           ;              c -> R20
+ 0116           ;              b -> R22
+ 0116           ;          motor -> R16
+                        .even
+ 0116           _Pwm_startup::
+ 0116 4A93              st -y,R20
+ 0118 6A93              st -y,R22
+ 011A                   .dbline -1
+ 011A                   .dbline 163
+ 011A           ; }
+ 011A           ; 
+ 011A           ; 
+ 011A           ; void Pwm_startup(unsigned char motor)//电机软启动
+ 011A           ; {     unsigned char c,b;
+ 011A                   .dbline 165
+ 011A           ; 
+ 011A           ;       if(motor==1)
+ 011A 0130              cpi R16,1
+ 011C 09F0              breq X55
+ 011E 66C1              xjmp L15
+ 0120           X55:
+ 0120           X3:
+ 0120                   .dbline 166
+ 0120           ;       {  
+ 0120                   .dbline 167
+ 0120           ;          Motor1Status.s.RUN=1;
+ 0120 80910B00          lds R24,_Motor1Status
+ 0124 90910C00          lds R25,_Motor1Status+1
+ 0128 8160              ori R24,1
+ 012A 90930C00          sts _Motor1Status+1,R25
+ 012E 80930B00          sts _Motor1Status,R24
+ 0132                   .dbline 169
+ 0132           ;          
+ 0132           ;          if(Motor1Status.s.DIR==1)//正转
+ 0132 9695              lsr R25
+ 0134 8795              ror R24
+ 0136 8170              andi R24,1
+ 0138 9070              andi R25,0
+ 013A 8130              cpi R24,1
+ 013C E0E0              ldi R30,0
+ 013E 9E07              cpc R25,R30
+ 0140 09F0              breq X56
+ 0142 AAC0              xjmp L17
+ 0144           X56:
+ 0144           X4:
+ 0144                   .dbline 170
+ 0144           ;          { 
+ 0144                   .dbline 171
+ 0144           ;            MT1_N1_Clr();// 关上MOS管
+ 0144 80916500          lds R24,101
+ 0148 8E7F              andi R24,254
+ 014A 80936500          sts 101,R24
+ 014E                   .dbline 172
+ 014E           ;                DELAY500
+ 014E 2224              clr R2
+ 0150 20920000          sts _Tt,R2
+ 0154 05C0              xjmp L22
+ 0156           L19:
+ 0156                   .dbline 172
+ 0156           L20:
+ 0156                   .dbline 172
+ 0156 80910000          lds R24,_Tt
+ 015A 8F5F              subi R24,255    ; addi 1
+ 015C 80930000          sts _Tt,R24
+ 0160           L22:
+ 0160                   .dbline 172
+ 0160 80910000          lds R24,_Tt
+ 0164 823D              cpi R24,210
+ 0166 B8F3              brlo L19
+ 0168           X5:
+ 0168                   .dbline 173
+ 0168           ;                DELAY500
+ 0168 2224              clr R2
+ 016A 20920000          sts _Tt,R2
+ 016E 05C0              xjmp L26
+ 0170           L23:
+ 0170                   .dbline 173
+ 0170           L24:
+ 0170                   .dbline 173
+ 0170 80910000          lds R24,_Tt
+ 0174 8F5F              subi R24,255    ; addi 1
+ 0176 80930000          sts _Tt,R24
+ 017A           L26:
+ 017A                   .dbline 173
+ 017A 80910000          lds R24,_Tt
+ 017E 823D              cpi R24,210
+ 0180 B8F3              brlo L23
+ 0182           X6:
+ 0182                   .dbline 174
+ 0182           ;                MT1_N2_Clr();// 关下MOS管
+ 0182 9798              cbi 0x12,7
+ 0184                   .dbline 175
+ 0184           ;                DELAY500
+ 0184 2224              clr R2
+ 0186 20920000          sts _Tt,R2
+ 018A 05C0              xjmp L30
+ 018C           L27:
+ 018C                   .dbline 175
+ 018C           L28:
+ 018C                   .dbline 175
+ 018C 80910000          lds R24,_Tt
+ 0190 8F5F              subi R24,255    ; addi 1
+ 0192 80930000          sts _Tt,R24
+ 0196           L30:
+ 0196                   .dbline 175
+ 0196 80910000          lds R24,_Tt
+ 019A 823D              cpi R24,210
+ 019C B8F3              brlo L27
+ 019E           X7:
+ 019E                   .dbline 176
+ 019E           ;                DELAY500
+ 019E 2224              clr R2
+ 01A0 20920000          sts _Tt,R2
+ 01A4 05C0              xjmp L34
+ 01A6           L31:
+ 01A6                   .dbline 176
+ 01A6           L32:
+ 01A6                   .dbline 176
+ 01A6 80910000          lds R24,_Tt
+ 01AA 8F5F              subi R24,255    ; addi 1
+ 01AC 80930000          sts _Tt,R24
+ 01B0           L34:
+ 01B0                   .dbline 176
+ 01B0 80910000          lds R24,_Tt
+ 01B4 823D              cpi R24,210
+ 01B6 B8F3              brlo L31
+ 01B8           X8:
+ 01B8                   .dbline 178
+ 01B8           ;                
+ 01B8           ;            MT1_P1_Set();//打开上MOS管
+ 01B8 80916500          lds R24,101
+ 01BC 8260              ori R24,2
+ 01BE 80936500          sts 101,R24
+ 01C2                   .dbline 179
+ 01C2           ;                DELAY500
+ 01C2 2224              clr R2
+ 01C4 20920000          sts _Tt,R2
+ 01C8 05C0              xjmp L38
+ 01CA           L35:
+ 01CA                   .dbline 179
+ 01CA           L36:
+ 01CA                   .dbline 179
+ 01CA 80910000          lds R24,_Tt
+ 01CE 8F5F              subi R24,255    ; addi 1
+ 01D0 80930000          sts _Tt,R24
+ 01D4           L38:
+ 01D4                   .dbline 179
+ 01D4 80910000          lds R24,_Tt
+ 01D8 823D              cpi R24,210
+ 01DA B8F3              brlo L35
+ 01DC           X9:
+ 01DC                   .dbline 181
+ 01DC           ;                
+ 01DC           ;            for(b=0;b<30;b++)//3ms采用等占空比启动电机
+ 01DC 6627              clr R22
+ 01DE 1DC0              xjmp L42
+ 01E0           L39:
+ 01E0                   .dbline 182
+ 01E0           ;                {
+ 01E0                   .dbline 183
+ 01E0           ;                 MT1_P2_Clr();//关闭下MOs管 
+ 01E0 9698              cbi 0x12,6
+ 01E2                   .dbline 184
+ 01E2           ;                 DELAY100
+ 01E2 2224              clr R2
+ 01E4 20920000          sts _Tt,R2
+ 01E8 05C0              xjmp L46
+ 01EA           L43:
+ 01EA                   .dbline 184
+ 01EA           L44:
+ 01EA                   .dbline 184
+ 01EA 80910000          lds R24,_Tt
+ 01EE 8F5F              subi R24,255    ; addi 1
+ 01F0 80930000          sts _Tt,R24
+ 01F4           L46:
+ 01F4                   .dbline 184
+ 01F4 80910000          lds R24,_Tt
+ 01F8 8A32              cpi R24,42
+ 01FA B8F3              brlo L43
+ 01FC           X10:
+ 01FC                   .dbline 185
+ 01FC           ;                 MT1_P2_Set();//打开下MOS管
+ 01FC 969A              sbi 0x12,6
+ 01FE                   .dbline 186
+ 01FE           ;                 DELAY100
+ 01FE 2224              clr R2
+ 0200 20920000          sts _Tt,R2
+ 0204 05C0              xjmp L50
+ 0206           L47:
+ 0206                   .dbline 186
+ 0206           L48:
+ 0206                   .dbline 186
+ 0206 80910000          lds R24,_Tt
+ 020A 8F5F              subi R24,255    ; addi 1
+ 020C 80930000          sts _Tt,R24
+ 0210           L50:
+ 0210                   .dbline 186
+ 0210 80910000          lds R24,_Tt
+ 0214 8A32              cpi R24,42
+ 0216 B8F3              brlo L47
+ 0218           X11:
+ 0218                   .dbline 187
+ 0218           ;                }
+ 0218           L40:
+ 0218                   .dbline 181
+ 0218 6395              inc R22
+ 021A           L42:
+ 021A                   .dbline 181
+ 021A 6E31              cpi R22,30
+ 021C 08F3              brlo L39
+ 021E           X12:
+ 021E                   .dbline 189
+ 021E           ;  
+ 021E           ;        for(c=0;c<200;c++)//130ms采用降低占空比启动电机
+ 021E 4427              clr R20
+ 0220 37C0              xjmp L54
+ 0222           L51:
+ 0222                   .dbline 190
+ 0222           ;                {
+ 0222                   .dbline 191
+ 0222           ;              MT1_P2_Clr();//关闭下MOs管 
+ 0222 9698              cbi 0x12,6
+ 0224                   .dbline 193
+ 0224           ;                  
+ 0224           ;                  for(b=0;b<(200-c);b++)
+ 0224 6627              clr R22
+ 0226 0CC0              xjmp L58
+ 0228           L55:
+ 0228                   .dbline 194
+ 0228           ;                   {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 0228                   .dbline 194
+ 0228 0000              nop
+ 022A                   .dbline 194
+ 022A 0000              nop
+ 022C                   .dbline 194
+ 022C 0000              nop
+ 022E                   .dbline 194
+ 022E 0000              nop
+ 0230                   .dbline 194
+ 0230 0000              nop
+ 0232                   .dbline 194
+ 0232 0000              nop
+ 0234                   .dbline 194
+ 0234 0000              nop
+ 0236                   .dbline 194
+ 0236 0000              nop
+ 0238                   .dbline 194
+ 0238 0000              nop
+ 023A                   .dbline 194
+ 023A 0000              nop
+ 023C                   .dbline 194
+ 023C 0000              nop
+ 023E                   .dbline 194
+ 023E           L56:
+ 023E                   .dbline 193
+ 023E 6395              inc R22
+ 0240           L58:
+ 0240                   .dbline 193
+ 0240 242E              mov R2,R20
+ 0242 3324              clr R3
+ 0244 88EC              ldi R24,200
+ 0246 90E0              ldi R25,0
+ 0248 2C01              movw R4,R24
+ 024A 4218              sub R4,R2
+ 024C 5308              sbc R5,R3
+ 024E 262E              mov R2,R22
+ 0250 3324              clr R3
+ 0252 2414              cp R2,R4
+ 0254 3504              cpc R3,R5
+ 0256 44F3              brlt L55
+ 0258           X13:
+ 0258                   .dbline 196
+ 0258           ;                       
+ 0258           ;              if(Motor1Status.s.UnderVoltage==0)//如意启动过程中没有发生欠压，则继续启动
+ 0258 20900B00          lds R2,_Motor1Status
+ 025C 30900C00          lds R3,_Motor1Status+1
+ 0260 25FC              sbrc R2,5
+ 0262 02C0              rjmp L59
+ 0264           X14:
+ 0264                   .dbline 197
+ 0264           ;                  {
+ 0264                   .dbline 198
+ 0264           ;                    MT1_P2_Set();//打开下MOS管
+ 0264 969A              sbi 0x12,6
+ 0266                   .dbline 199
+ 0266           ;                  }
+ 0266 01C0              xjmp L60
+ 0268           L59:
+ 0268                   .dbline 201
+ 0268           ;                  else 
+ 0268           ;                  {
+ 0268                   .dbline 202
+ 0268           ;                    MT1_P2_Clr();//关闭下MOs管 
+ 0268 9698              cbi 0x12,6
+ 026A                   .dbline 203
+ 026A           ;                  }
+ 026A           L60:
+ 026A                   .dbline 205
+ 026A           ;                  
+ 026A           ;              for(b=0;b<(c+50);b++)
+ 026A 6627              clr R22
+ 026C 0CC0              xjmp L64
+ 026E           L61:
+ 026E                   .dbline 206
+ 026E           ;                  {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 026E                   .dbline 206
+ 026E 0000              nop
+ 0270                   .dbline 206
+ 0270 0000              nop
+ 0272                   .dbline 206
+ 0272 0000              nop
+ 0274                   .dbline 206
+ 0274 0000              nop
+ 0276                   .dbline 206
+ 0276 0000              nop
+ 0278                   .dbline 206
+ 0278 0000              nop
+ 027A                   .dbline 206
+ 027A 0000              nop
+ 027C                   .dbline 206
+ 027C 0000              nop
+ 027E                   .dbline 206
+ 027E 0000              nop
+ 0280                   .dbline 206
+ 0280 0000              nop
+ 0282                   .dbline 206
+ 0282 0000              nop
+ 0284                   .dbline 206
+ 0284           L62:
+ 0284                   .dbline 205
+ 0284 6395              inc R22
+ 0286           L64:
+ 0286                   .dbline 205
+ 0286 842F              mov R24,R20
+ 0288 8E5C              subi R24,206    ; addi 50
+ 028A 6817              cp R22,R24
+ 028C 80F3              brlo L61
+ 028E           X15:
+ 028E                   .dbline 207
+ 028E           ;                }      
+ 028E           L52:
+ 028E                   .dbline 189
+ 028E 4395              inc R20
+ 0290           L54:
+ 0290                   .dbline 189
+ 0290 483C              cpi R20,200
+ 0292 08F4              brsh X57
+ 0294 C6CF              xjmp L51
+ 0296           X57:
+ 0296           X16:
+ 0296                   .dbline 208
+ 0296           ;          }
+ 0296 02C2              xjmp L16
+ 0298           L17:
+ 0298                   .dbline 210
+ 0298           ;          else//反转
+ 0298           ;          {
+ 0298                   .dbline 211
+ 0298           ;             MT1_P1_Clr();// 关上MOS管
+ 0298 80916500          lds R24,101
+ 029C 8D7F              andi R24,253
+ 029E 80936500          sts 101,R24
+ 02A2                   .dbline 212
+ 02A2           ;                 DELAY500
+ 02A2 2224              clr R2
+ 02A4 20920000          sts _Tt,R2
+ 02A8 05C0              xjmp L68
+ 02AA           L65:
+ 02AA                   .dbline 212
+ 02AA           L66:
+ 02AA                   .dbline 212
+ 02AA 80910000          lds R24,_Tt
+ 02AE 8F5F              subi R24,255    ; addi 1
+ 02B0 80930000          sts _Tt,R24
+ 02B4           L68:
+ 02B4                   .dbline 212
+ 02B4 80910000          lds R24,_Tt
+ 02B8 823D              cpi R24,210
+ 02BA B8F3              brlo L65
+ 02BC           X17:
+ 02BC                   .dbline 213
+ 02BC           ;                 DELAY500
+ 02BC 2224              clr R2
+ 02BE 20920000          sts _Tt,R2
+ 02C2 05C0              xjmp L72
+ 02C4           L69:
+ 02C4                   .dbline 213
+ 02C4           L70:
+ 02C4                   .dbline 213
+ 02C4 80910000          lds R24,_Tt
+ 02C8 8F5F              subi R24,255    ; addi 1
+ 02CA 80930000          sts _Tt,R24
+ 02CE           L72:
+ 02CE                   .dbline 213
+ 02CE 80910000          lds R24,_Tt
+ 02D2 823D              cpi R24,210
+ 02D4 B8F3              brlo L69
+ 02D6           X18:
+ 02D6                   .dbline 214
+ 02D6           ;                 MT1_P2_Clr();// 关下MOS管
+ 02D6 9698              cbi 0x12,6
+ 02D8                   .dbline 215
+ 02D8           ;                 DELAY500
+ 02D8 2224              clr R2
+ 02DA 20920000          sts _Tt,R2
+ 02DE 05C0              xjmp L76
+ 02E0           L73:
+ 02E0                   .dbline 215
+ 02E0           L74:
+ 02E0                   .dbline 215
+ 02E0 80910000          lds R24,_Tt
+ 02E4 8F5F              subi R24,255    ; addi 1
+ 02E6 80930000          sts _Tt,R24
+ 02EA           L76:
+ 02EA                   .dbline 215
+ 02EA 80910000          lds R24,_Tt
+ 02EE 823D              cpi R24,210
+ 02F0 B8F3              brlo L73
+ 02F2           X19:
+ 02F2                   .dbline 216
+ 02F2           ;                 DELAY500
+ 02F2 2224              clr R2
+ 02F4 20920000          sts _Tt,R2
+ 02F8 05C0              xjmp L80
+ 02FA           L77:
+ 02FA                   .dbline 216
+ 02FA           L78:
+ 02FA                   .dbline 216
+ 02FA 80910000          lds R24,_Tt
+ 02FE 8F5F              subi R24,255    ; addi 1
+ 0300 80930000          sts _Tt,R24
+ 0304           L80:
+ 0304                   .dbline 216
+ 0304 80910000          lds R24,_Tt
+ 0308 823D              cpi R24,210
+ 030A B8F3              brlo L77
+ 030C           X20:
+ 030C                   .dbline 218
+ 030C           ;                
+ 030C           ;             MT1_N1_Set();//打开上MOS管
+ 030C 80916500          lds R24,101
+ 0310 8160              ori R24,1
+ 0312 80936500          sts 101,R24
+ 0316                   .dbline 219
+ 0316           ;                 DELAY500
+ 0316 2224              clr R2
+ 0318 20920000          sts _Tt,R2
+ 031C 05C0              xjmp L84
+ 031E           L81:
+ 031E                   .dbline 219
+ 031E           L82:
+ 031E                   .dbline 219
+ 031E 80910000          lds R24,_Tt
+ 0322 8F5F              subi R24,255    ; addi 1
+ 0324 80930000          sts _Tt,R24
+ 0328           L84:
+ 0328                   .dbline 219
+ 0328 80910000          lds R24,_Tt
+ 032C 823D              cpi R24,210
+ 032E B8F3              brlo L81
+ 0330           X21:
+ 0330                   .dbline 221
+ 0330           ;                
+ 0330           ;            for(b=0;b<30;b++)//3ms采用等占空比启动电机
+ 0330 6627              clr R22
+ 0332 1DC0              xjmp L88
+ 0334           L85:
+ 0334                   .dbline 222
+ 0334           ;                {
+ 0334                   .dbline 223
+ 0334           ;                 MT1_N2_Clr();//关闭下MOs管 
+ 0334 9798              cbi 0x12,7
+ 0336                   .dbline 224
+ 0336           ;                 DELAY100
+ 0336 2224              clr R2
+ 0338 20920000          sts _Tt,R2
+ 033C 05C0              xjmp L92
+ 033E           L89:
+ 033E                   .dbline 224
+ 033E           L90:
+ 033E                   .dbline 224
+ 033E 80910000          lds R24,_Tt
+ 0342 8F5F              subi R24,255    ; addi 1
+ 0344 80930000          sts _Tt,R24
+ 0348           L92:
+ 0348                   .dbline 224
+ 0348 80910000          lds R24,_Tt
+ 034C 8A32              cpi R24,42
+ 034E B8F3              brlo L89
+ 0350           X22:
+ 0350                   .dbline 225
+ 0350           ;                 MT1_N2_Set();//打开下MOS管
+ 0350 979A              sbi 0x12,7
+ 0352                   .dbline 226
+ 0352           ;                 DELAY100
+ 0352 2224              clr R2
+ 0354 20920000          sts _Tt,R2
+ 0358 05C0              xjmp L96
+ 035A           L93:
+ 035A                   .dbline 226
+ 035A           L94:
+ 035A                   .dbline 226
+ 035A 80910000          lds R24,_Tt
+ 035E 8F5F              subi R24,255    ; addi 1
+ 0360 80930000          sts _Tt,R24
+ 0364           L96:
+ 0364                   .dbline 226
+ 0364 80910000          lds R24,_Tt
+ 0368 8A32              cpi R24,42
+ 036A B8F3              brlo L93
+ 036C           X23:
+ 036C                   .dbline 227
+ 036C           ;                }
+ 036C           L86:
+ 036C                   .dbline 221
+ 036C 6395              inc R22
+ 036E           L88:
+ 036E                   .dbline 221
+ 036E 6E31              cpi R22,30
+ 0370 08F3              brlo L85
+ 0372           X24:
+ 0372                   .dbline 229
+ 0372           ;  
+ 0372           ;        for(c=0;c<200;c++)//130ms采用降低占空比启动电机
+ 0372 4427              clr R20
+ 0374 37C0              xjmp L100
+ 0376           L97:
+ 0376                   .dbline 230
+ 0376           ;                {
+ 0376                   .dbline 231
+ 0376           ;              MT1_N2_Clr();//关闭下MOs管 
+ 0376 9798              cbi 0x12,7
+ 0378                   .dbline 233
+ 0378           ;                  
+ 0378           ;                  for(b=0;b<(200-c);b++)
+ 0378 6627              clr R22
+ 037A 0CC0              xjmp L104
+ 037C           L101:
+ 037C                   .dbline 234
+ 037C           ;                   {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 037C                   .dbline 234
+ 037C 0000              nop
+ 037E                   .dbline 234
+ 037E 0000              nop
+ 0380                   .dbline 234
+ 0380 0000              nop
+ 0382                   .dbline 234
+ 0382 0000              nop
+ 0384                   .dbline 234
+ 0384 0000              nop
+ 0386                   .dbline 234
+ 0386 0000              nop
+ 0388                   .dbline 234
+ 0388 0000              nop
+ 038A                   .dbline 234
+ 038A 0000              nop
+ 038C                   .dbline 234
+ 038C 0000              nop
+ 038E                   .dbline 234
+ 038E 0000              nop
+ 0390                   .dbline 234
+ 0390 0000              nop
+ 0392                   .dbline 234
+ 0392           L102:
+ 0392                   .dbline 233
+ 0392 6395              inc R22
+ 0394           L104:
+ 0394                   .dbline 233
+ 0394 242E              mov R2,R20
+ 0396 3324              clr R3
+ 0398 88EC              ldi R24,200
+ 039A 90E0              ldi R25,0
+ 039C 2C01              movw R4,R24
+ 039E 4218              sub R4,R2
+ 03A0 5308              sbc R5,R3
+ 03A2 262E              mov R2,R22
+ 03A4 3324              clr R3
+ 03A6 2414              cp R2,R4
+ 03A8 3504              cpc R3,R5
+ 03AA 44F3              brlt L101
+ 03AC           X25:
+ 03AC                   .dbline 236
+ 03AC           ;                       
+ 03AC           ;              if(Motor1Status.s.UnderVoltage==0)//如意启动过程中没有发生欠压，则继续启动
+ 03AC 20900B00          lds R2,_Motor1Status
+ 03B0 30900C00          lds R3,_Motor1Status+1
+ 03B4 25FC              sbrc R2,5
+ 03B6 02C0              rjmp L105
+ 03B8           X26:
+ 03B8                   .dbline 237
+ 03B8           ;                  {
+ 03B8                   .dbline 238
+ 03B8           ;                    MT1_N2_Set();//打开下MOS管
+ 03B8 979A              sbi 0x12,7
+ 03BA                   .dbline 239
+ 03BA           ;                  }
+ 03BA 01C0              xjmp L106
+ 03BC           L105:
+ 03BC                   .dbline 241
+ 03BC           ;                  else 
+ 03BC           ;                  {
+ 03BC                   .dbline 242
+ 03BC           ;                    MT1_N2_Clr();//关闭下MOs管 
+ 03BC 9798              cbi 0x12,7
+ 03BE                   .dbline 243
+ 03BE           ;                  }
+ 03BE           L106:
+ 03BE                   .dbline 245
+ 03BE           ;                  
+ 03BE           ;              for(b=0;b<(c+50);b++)
+ 03BE 6627              clr R22
+ 03C0 0CC0              xjmp L110
+ 03C2           L107:
+ 03C2                   .dbline 246
+ 03C2           ;                  {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 03C2                   .dbline 246
+ 03C2 0000              nop
+ 03C4                   .dbline 246
+ 03C4 0000              nop
+ 03C6                   .dbline 246
+ 03C6 0000              nop
+ 03C8                   .dbline 246
+ 03C8 0000              nop
+ 03CA                   .dbline 246
+ 03CA 0000              nop
+ 03CC                   .dbline 246
+ 03CC 0000              nop
+ 03CE                   .dbline 246
+ 03CE 0000              nop
+ 03D0                   .dbline 246
+ 03D0 0000              nop
+ 03D2                   .dbline 246
+ 03D2 0000              nop
+ 03D4                   .dbline 246
+ 03D4 0000              nop
+ 03D6                   .dbline 246
+ 03D6 0000              nop
+ 03D8                   .dbline 246
+ 03D8           L108:
+ 03D8                   .dbline 245
+ 03D8 6395              inc R22
+ 03DA           L110:
+ 03DA                   .dbline 245
+ 03DA 842F              mov R24,R20
+ 03DC 8E5C              subi R24,206    ; addi 50
+ 03DE 6817              cp R22,R24
+ 03E0 80F3              brlo L107
+ 03E2           X27:
+ 03E2                   .dbline 247
+ 03E2           ;                }      
+ 03E2           L98:
+ 03E2                   .dbline 229
+ 03E2 4395              inc R20
+ 03E4           L100:
+ 03E4                   .dbline 229
+ 03E4 483C              cpi R20,200
+ 03E6 08F4              brsh X58
+ 03E8 C6CF              xjmp L97
+ 03EA           X58:
+ 03EA           X28:
+ 03EA                   .dbline 248
+ 03EA           ;          }
+ 03EA                   .dbline 249
+ 03EA           ;       } 
+ 03EA 58C1              xjmp L16
+ 03EC           L15:
+ 03EC                   .dbline 250
+ 03EC           ;       else if(motor==2)
+ 03EC 0230              cpi R16,2
+ 03EE 09F0              breq X59
+ 03F0 55C1              xjmp L111
+ 03F2           X59:
+ 03F2           X29:
+ 03F2                   .dbline 251
+ 03F2           ;       {  
+ 03F2                   .dbline 252
+ 03F2           ;         Motor2Status.s.RUN=1;
+ 03F2 80910900          lds R24,_Motor2Status
+ 03F6 90910A00          lds R25,_Motor2Status+1
+ 03FA 8160              ori R24,1
+ 03FC 90930A00          sts _Motor2Status+1,R25
+ 0400 80930900          sts _Motor2Status,R24
+ 0404                   .dbline 254
+ 0404           ;         
+ 0404           ;         if(Motor2Status.s.DIR==1)//正转
+ 0404 9695              lsr R25
+ 0406 8795              ror R24
+ 0408 8170              andi R24,1
+ 040A 9070              andi R25,0
+ 040C 8130              cpi R24,1
+ 040E E0E0              ldi R30,0
+ 0410 9E07              cpc R25,R30
+ 0412 09F0              breq X60
+ 0414 A2C0              xjmp L113
+ 0416           X60:
+ 0416           X30:
+ 0416                   .dbline 255
+ 0416           ;          { 
+ 0416                   .dbline 256
+ 0416           ;            MT2_N1_Clr();// 关上MOS管
+ 0416 DD98              cbi 0x1b,5
+ 0418                   .dbline 257
+ 0418           ;                DELAY500
+ 0418 2224              clr R2
+ 041A 20920000          sts _Tt,R2
+ 041E 05C0              xjmp L118
+ 0420           L115:
+ 0420                   .dbline 257
+ 0420           L116:
+ 0420                   .dbline 257
+ 0420 80910000          lds R24,_Tt
+ 0424 8F5F              subi R24,255    ; addi 1
+ 0426 80930000          sts _Tt,R24
+ 042A           L118:
+ 042A                   .dbline 257
+ 042A 80910000          lds R24,_Tt
+ 042E 823D              cpi R24,210
+ 0430 B8F3              brlo L115
+ 0432           X31:
+ 0432                   .dbline 258
+ 0432           ;                DELAY500
+ 0432 2224              clr R2
+ 0434 20920000          sts _Tt,R2
+ 0438 05C0              xjmp L122
+ 043A           L119:
+ 043A                   .dbline 258
+ 043A           L120:
+ 043A                   .dbline 258
+ 043A 80910000          lds R24,_Tt
+ 043E 8F5F              subi R24,255    ; addi 1
+ 0440 80930000          sts _Tt,R24
+ 0444           L122:
+ 0444                   .dbline 258
+ 0444 80910000          lds R24,_Tt
+ 0448 823D              cpi R24,210
+ 044A B8F3              brlo L119
+ 044C           X32:
+ 044C                   .dbline 259
+ 044C           ;                MT2_N2_Clr();// 关下MOS管
+ 044C DB98              cbi 0x1b,3
+ 044E                   .dbline 260
+ 044E           ;                DELAY500
+ 044E 2224              clr R2
+ 0450 20920000          sts _Tt,R2
+ 0454 05C0              xjmp L126
+ 0456           L123:
+ 0456                   .dbline 260
+ 0456           L124:
+ 0456                   .dbline 260
+ 0456 80910000          lds R24,_Tt
+ 045A 8F5F              subi R24,255    ; addi 1
+ 045C 80930000          sts _Tt,R24
+ 0460           L126:
+ 0460                   .dbline 260
+ 0460 80910000          lds R24,_Tt
+ 0464 823D              cpi R24,210
+ 0466 B8F3              brlo L123
+ 0468           X33:
+ 0468                   .dbline 261
+ 0468           ;                DELAY500
+ 0468 2224              clr R2
+ 046A 20920000          sts _Tt,R2
+ 046E 05C0              xjmp L130
+ 0470           L127:
+ 0470                   .dbline 261
+ 0470           L128:
+ 0470                   .dbline 261
+ 0470 80910000          lds R24,_Tt
+ 0474 8F5F              subi R24,255    ; addi 1
+ 0476 80930000          sts _Tt,R24
+ 047A           L130:
+ 047A                   .dbline 261
+ 047A 80910000          lds R24,_Tt
+ 047E 823D              cpi R24,210
+ 0480 B8F3              brlo L127
+ 0482           X34:
+ 0482                   .dbline 263
+ 0482           ;                
+ 0482           ;            MT2_P1_Set();//打开上MOS管
+ 0482 DC9A              sbi 0x1b,4
+ 0484                   .dbline 264
+ 0484           ;                DELAY500
+ 0484 2224              clr R2
+ 0486 20920000          sts _Tt,R2
+ 048A 05C0              xjmp L134
+ 048C           L131:
+ 048C                   .dbline 264
+ 048C           L132:
+ 048C                   .dbline 264
+ 048C 80910000          lds R24,_Tt
+ 0490 8F5F              subi R24,255    ; addi 1
+ 0492 80930000          sts _Tt,R24
+ 0496           L134:
+ 0496                   .dbline 264
+ 0496 80910000          lds R24,_Tt
+ 049A 823D              cpi R24,210
+ 049C B8F3              brlo L131
+ 049E           X35:
+ 049E                   .dbline 266
+ 049E           ;                
+ 049E           ;            for(b=0;b<30;b++)//3ms采用等占空比启动电机
+ 049E 6627              clr R22
+ 04A0 1DC0              xjmp L138
+ 04A2           L135:
+ 04A2                   .dbline 267
+ 04A2           ;                {
+ 04A2                   .dbline 268
+ 04A2           ;                 MT2_P2_Clr();//关闭下MOs管 
+ 04A2 DA98              cbi 0x1b,2
+ 04A4                   .dbline 269
+ 04A4           ;                 DELAY100
+ 04A4 2224              clr R2
+ 04A6 20920000          sts _Tt,R2
+ 04AA 05C0              xjmp L142
+ 04AC           L139:
+ 04AC                   .dbline 269
+ 04AC           L140:
+ 04AC                   .dbline 269
+ 04AC 80910000          lds R24,_Tt
+ 04B0 8F5F              subi R24,255    ; addi 1
+ 04B2 80930000          sts _Tt,R24
+ 04B6           L142:
+ 04B6                   .dbline 269
+ 04B6 80910000          lds R24,_Tt
+ 04BA 8A32              cpi R24,42
+ 04BC B8F3              brlo L139
+ 04BE           X36:
+ 04BE                   .dbline 270
+ 04BE           ;                 MT2_P2_Set();//打开下MOS管
+ 04BE DA9A              sbi 0x1b,2
+ 04C0                   .dbline 271
+ 04C0           ;                 DELAY100
+ 04C0 2224              clr R2
+ 04C2 20920000          sts _Tt,R2
+ 04C6 05C0              xjmp L146
+ 04C8           L143:
+ 04C8                   .dbline 271
+ 04C8           L144:
+ 04C8                   .dbline 271
+ 04C8 80910000          lds R24,_Tt
+ 04CC 8F5F              subi R24,255    ; addi 1
+ 04CE 80930000          sts _Tt,R24
+ 04D2           L146:
+ 04D2                   .dbline 271
+ 04D2 80910000          lds R24,_Tt
+ 04D6 8A32              cpi R24,42
+ 04D8 B8F3              brlo L143
+ 04DA           X37:
+ 04DA                   .dbline 272
+ 04DA           ;                }
+ 04DA           L136:
+ 04DA                   .dbline 266
+ 04DA 6395              inc R22
+ 04DC           L138:
+ 04DC                   .dbline 266
+ 04DC 6E31              cpi R22,30
+ 04DE 08F3              brlo L135
+ 04E0           X38:
+ 04E0                   .dbline 274
+ 04E0           ;  
+ 04E0           ;        for(c=0;c<200;c++)//130ms采用降低占空比启动电机
+ 04E0 4427              clr R20
+ 04E2 37C0              xjmp L150
+ 04E4           L147:
+ 04E4                   .dbline 275
+ 04E4           ;                {
+ 04E4                   .dbline 276
+ 04E4           ;              MT2_P2_Clr();//关闭下MOs管 
+ 04E4 DA98              cbi 0x1b,2
+ 04E6                   .dbline 278
+ 04E6           ;                  
+ 04E6           ;                  for(b=0;b<(200-c);b++)
+ 04E6 6627              clr R22
+ 04E8 0CC0              xjmp L154
+ 04EA           L151:
+ 04EA                   .dbline 279
+ 04EA           ;                   {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 04EA                   .dbline 279
+ 04EA 0000              nop
+ 04EC                   .dbline 279
+ 04EC 0000              nop
+ 04EE                   .dbline 279
+ 04EE 0000              nop
+ 04F0                   .dbline 279
+ 04F0 0000              nop
+ 04F2                   .dbline 279
+ 04F2 0000              nop
+ 04F4                   .dbline 279
+ 04F4 0000              nop
+ 04F6                   .dbline 279
+ 04F6 0000              nop
+ 04F8                   .dbline 279
+ 04F8 0000              nop
+ 04FA                   .dbline 279
+ 04FA 0000              nop
+ 04FC                   .dbline 279
+ 04FC 0000              nop
+ 04FE                   .dbline 279
+ 04FE 0000              nop
+ 0500                   .dbline 279
+ 0500           L152:
+ 0500                   .dbline 278
+ 0500 6395              inc R22
+ 0502           L154:
+ 0502                   .dbline 278
+ 0502 242E              mov R2,R20
+ 0504 3324              clr R3
+ 0506 88EC              ldi R24,200
+ 0508 90E0              ldi R25,0
+ 050A 2C01              movw R4,R24
+ 050C 4218              sub R4,R2
+ 050E 5308              sbc R5,R3
+ 0510 262E              mov R2,R22
+ 0512 3324              clr R3
+ 0514 2414              cp R2,R4
+ 0516 3504              cpc R3,R5
+ 0518 44F3              brlt L151
+ 051A           X39:
+ 051A                   .dbline 281
+ 051A           ;                       
+ 051A           ;              if(Motor2Status.s.UnderVoltage==0)//如意启动过程中没有发生欠压，则继续启动
+ 051A 20900900          lds R2,_Motor2Status
+ 051E 30900A00          lds R3,_Motor2Status+1
+ 0522 25FC              sbrc R2,5
+ 0524 02C0              rjmp L155
+ 0526           X40:
+ 0526                   .dbline 282
+ 0526           ;                  {
+ 0526                   .dbline 283
+ 0526           ;                    MT2_P2_Set();//打开下MOS管
+ 0526 DA9A              sbi 0x1b,2
+ 0528                   .dbline 284
+ 0528           ;                  }
+ 0528 01C0              xjmp L156
+ 052A           L155:
+ 052A                   .dbline 286
+ 052A           ;                  else 
+ 052A           ;                  {
+ 052A                   .dbline 287
+ 052A           ;                    MT2_P2_Clr();//关闭下MOs管 
+ 052A DA98              cbi 0x1b,2
+ 052C                   .dbline 288
+ 052C           ;                  }
+ 052C           L156:
+ 052C                   .dbline 290
+ 052C           ;                  
+ 052C           ;              for(b=0;b<(c+50);b++)
+ 052C 6627              clr R22
+ 052E 0CC0              xjmp L160
+ 0530           L157:
+ 0530                   .dbline 291
+ 0530           ;                  {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 0530                   .dbline 291
+ 0530 0000              nop
+ 0532                   .dbline 291
+ 0532 0000              nop
+ 0534                   .dbline 291
+ 0534 0000              nop
+ 0536                   .dbline 291
+ 0536 0000              nop
+ 0538                   .dbline 291
+ 0538 0000              nop
+ 053A                   .dbline 291
+ 053A 0000              nop
+ 053C                   .dbline 291
+ 053C 0000              nop
+ 053E                   .dbline 291
+ 053E 0000              nop
+ 0540                   .dbline 291
+ 0540 0000              nop
+ 0542                   .dbline 291
+ 0542 0000              nop
+ 0544                   .dbline 291
+ 0544 0000              nop
+ 0546                   .dbline 291
+ 0546           L158:
+ 0546                   .dbline 290
+ 0546 6395              inc R22
+ 0548           L160:
+ 0548                   .dbline 290
+ 0548 842F              mov R24,R20
+ 054A 8E5C              subi R24,206    ; addi 50
+ 054C 6817              cp R22,R24
+ 054E 80F3              brlo L157
+ 0550           X41:
+ 0550                   .dbline 292
+ 0550           ;                }      
+ 0550           L148:
+ 0550                   .dbline 274
+ 0550 4395              inc R20
+ 0552           L150:
+ 0552                   .dbline 274
+ 0552 483C              cpi R20,200
+ 0554 08F4              brsh X61
+ 0556 C6CF              xjmp L147
+ 0558           X61:
+ 0558           X42:
+ 0558                   .dbline 293
+ 0558           ;          }
+ 0558 A1C0              xjmp L114
+ 055A           L113:
+ 055A                   .dbline 295
+ 055A           ;          else //反转
+ 055A           ;          {
+ 055A                   .dbline 296
+ 055A           ;             MT2_P1_Clr();// 关上MOS管
+ 055A DC98              cbi 0x1b,4
+ 055C                   .dbline 297
+ 055C           ;                 DELAY500
+ 055C 2224              clr R2
+ 055E 20920000          sts _Tt,R2
+ 0562 05C0              xjmp L164
+ 0564           L161:
+ 0564                   .dbline 297
+ 0564           L162:
+ 0564                   .dbline 297
+ 0564 80910000          lds R24,_Tt
+ 0568 8F5F              subi R24,255    ; addi 1
+ 056A 80930000          sts _Tt,R24
+ 056E           L164:
+ 056E                   .dbline 297
+ 056E 80910000          lds R24,_Tt
+ 0572 823D              cpi R24,210
+ 0574 B8F3              brlo L161
+ 0576           X43:
+ 0576                   .dbline 298
+ 0576           ;                 DELAY500
+ 0576 2224              clr R2
+ 0578 20920000          sts _Tt,R2
+ 057C 05C0              xjmp L168
+ 057E           L165:
+ 057E                   .dbline 298
+ 057E           L166:
+ 057E                   .dbline 298
+ 057E 80910000          lds R24,_Tt
+ 0582 8F5F              subi R24,255    ; addi 1
+ 0584 80930000          sts _Tt,R24
+ 0588           L168:
+ 0588                   .dbline 298
+ 0588 80910000          lds R24,_Tt
+ 058C 823D              cpi R24,210
+ 058E B8F3              brlo L165
+ 0590           X44:
+ 0590                   .dbline 299
+ 0590           ;                 MT2_P2_Clr();// 关下MOS管
+ 0590 DA98              cbi 0x1b,2
+ 0592                   .dbline 300
+ 0592           ;                 DELAY500
+ 0592 2224              clr R2
+ 0594 20920000          sts _Tt,R2
+ 0598 05C0              xjmp L172
+ 059A           L169:
+ 059A                   .dbline 300
+ 059A           L170:
+ 059A                   .dbline 300
+ 059A 80910000          lds R24,_Tt
+ 059E 8F5F              subi R24,255    ; addi 1
+ 05A0 80930000          sts _Tt,R24
+ 05A4           L172:
+ 05A4                   .dbline 300
+ 05A4 80910000          lds R24,_Tt
+ 05A8 823D              cpi R24,210
+ 05AA B8F3              brlo L169
+ 05AC           X45:
+ 05AC                   .dbline 301
+ 05AC           ;                 DELAY500
+ 05AC 2224              clr R2
+ 05AE 20920000          sts _Tt,R2
+ 05B2 05C0              xjmp L176
+ 05B4           L173:
+ 05B4                   .dbline 301
+ 05B4           L174:
+ 05B4                   .dbline 301
+ 05B4 80910000          lds R24,_Tt
+ 05B8 8F5F              subi R24,255    ; addi 1
+ 05BA 80930000          sts _Tt,R24
+ 05BE           L176:
+ 05BE                   .dbline 301
+ 05BE 80910000          lds R24,_Tt
+ 05C2 823D              cpi R24,210
+ 05C4 B8F3              brlo L173
+ 05C6           X46:
+ 05C6                   .dbline 303
+ 05C6           ;                
+ 05C6           ;             MT2_N1_Set();//打开上MOS管
+ 05C6 DD9A              sbi 0x1b,5
+ 05C8                   .dbline 304
+ 05C8           ;                 DELAY500
+ 05C8 2224              clr R2
+ 05CA 20920000          sts _Tt,R2
+ 05CE 05C0              xjmp L180
+ 05D0           L177:
+ 05D0                   .dbline 304
+ 05D0           L178:
+ 05D0                   .dbline 304
+ 05D0 80910000          lds R24,_Tt
+ 05D4 8F5F              subi R24,255    ; addi 1
+ 05D6 80930000          sts _Tt,R24
+ 05DA           L180:
+ 05DA                   .dbline 304
+ 05DA 80910000          lds R24,_Tt
+ 05DE 823D              cpi R24,210
+ 05E0 B8F3              brlo L177
+ 05E2           X47:
+ 05E2                   .dbline 306
+ 05E2           ;                
+ 05E2           ;            for(b=0;b<30;b++)//3ms采用等占空比启动电机
+ 05E2 6627              clr R22
+ 05E4 1DC0              xjmp L184
+ 05E6           L181:
+ 05E6                   .dbline 307
+ 05E6           ;                {
+ 05E6                   .dbline 308
+ 05E6           ;                 MT2_N2_Clr();//关闭下MOs管 
+ 05E6 DB98              cbi 0x1b,3
+ 05E8                   .dbline 309
+ 05E8           ;                 DELAY100
+ 05E8 2224              clr R2
+ 05EA 20920000          sts _Tt,R2
+ 05EE 05C0              xjmp L188
+ 05F0           L185:
+ 05F0                   .dbline 309
+ 05F0           L186:
+ 05F0                   .dbline 309
+ 05F0 80910000          lds R24,_Tt
+ 05F4 8F5F              subi R24,255    ; addi 1
+ 05F6 80930000          sts _Tt,R24
+ 05FA           L188:
+ 05FA                   .dbline 309
+ 05FA 80910000          lds R24,_Tt
+ 05FE 8A32              cpi R24,42
+ 0600 B8F3              brlo L185
+ 0602           X48:
+ 0602                   .dbline 310
+ 0602           ;                 MT2_N2_Set();//打开下MOS管
+ 0602 DB9A              sbi 0x1b,3
+ 0604                   .dbline 311
+ 0604           ;                 DELAY100
+ 0604 2224              clr R2
+ 0606 20920000          sts _Tt,R2
+ 060A 05C0              xjmp L192
+ 060C           L189:
+ 060C                   .dbline 311
+ 060C           L190:
+ 060C                   .dbline 311
+ 060C 80910000          lds R24,_Tt
+ 0610 8F5F              subi R24,255    ; addi 1
+ 0612 80930000          sts _Tt,R24
+ 0616           L192:
+ 0616                   .dbline 311
+ 0616 80910000          lds R24,_Tt
+ 061A 8A32              cpi R24,42
+ 061C B8F3              brlo L189
+ 061E           X49:
+ 061E                   .dbline 312
+ 061E           ;                }
+ 061E           L182:
+ 061E                   .dbline 306
+ 061E 6395              inc R22
+ 0620           L184:
+ 0620                   .dbline 306
+ 0620 6E31              cpi R22,30
+ 0622 08F3              brlo L181
+ 0624           X50:
+ 0624                   .dbline 314
+ 0624           ;  
+ 0624           ;        for(c=0;c<200;c++)//130ms采用降低占空比启动电机
+ 0624 4427              clr R20
+ 0626 37C0              xjmp L196
+ 0628           L193:
+ 0628                   .dbline 315
+ 0628           ;                {
+ 0628                   .dbline 316
+ 0628           ;              MT2_N2_Clr();//关闭下MOs管 
+ 0628 DB98              cbi 0x1b,3
+ 062A                   .dbline 318
+ 062A           ;                  
+ 062A           ;                  for(b=0;b<(200-c);b++)
+ 062A 6627              clr R22
+ 062C 0CC0              xjmp L200
+ 062E           L197:
+ 062E                   .dbline 319
+ 062E           ;                   {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 062E                   .dbline 319
+ 062E 0000              nop
+ 0630                   .dbline 319
+ 0630 0000              nop
+ 0632                   .dbline 319
+ 0632 0000              nop
+ 0634                   .dbline 319
+ 0634 0000              nop
+ 0636                   .dbline 319
+ 0636 0000              nop
+ 0638                   .dbline 319
+ 0638 0000              nop
+ 063A                   .dbline 319
+ 063A 0000              nop
+ 063C                   .dbline 319
+ 063C 0000              nop
+ 063E                   .dbline 319
+ 063E 0000              nop
+ 0640                   .dbline 319
+ 0640 0000              nop
+ 0642                   .dbline 319
+ 0642 0000              nop
+ 0644                   .dbline 319
+ 0644           L198:
+ 0644                   .dbline 318
+ 0644 6395              inc R22
+ 0646           L200:
+ 0646                   .dbline 318
+ 0646 242E              mov R2,R20
+ 0648 3324              clr R3
+ 064A 88EC              ldi R24,200
+ 064C 90E0              ldi R25,0
+ 064E 2C01              movw R4,R24
+ 0650 4218              sub R4,R2
+ 0652 5308              sbc R5,R3
+ 0654 262E              mov R2,R22
+ 0656 3324              clr R3
+ 0658 2414              cp R2,R4
+ 065A 3504              cpc R3,R5
+ 065C 44F3              brlt L197
+ 065E           X51:
+ 065E                   .dbline 321
+ 065E           ;                       
+ 065E           ;              if(Motor2Status.s.UnderVoltage==0)//如意启动过程中没有发生欠压，则继续启动
+ 065E 20900900          lds R2,_Motor2Status
+ 0662 30900A00          lds R3,_Motor2Status+1
+ 0666 25FC              sbrc R2,5
+ 0668 02C0              rjmp L201
+ 066A           X52:
+ 066A                   .dbline 322
+ 066A           ;                  {
+ 066A                   .dbline 323
+ 066A           ;                    MT2_N2_Set();//打开下MOS管
+ 066A DB9A              sbi 0x1b,3
+ 066C                   .dbline 324
+ 066C           ;                  }
+ 066C 01C0              xjmp L202
+ 066E           L201:
+ 066E                   .dbline 326
+ 066E           ;                  else 
+ 066E           ;                  {
+ 066E                   .dbline 327
+ 066E           ;                    MT2_N2_Clr();//关闭下MOs管 
+ 066E DB98              cbi 0x1b,3
+ 0670                   .dbline 328
+ 0670           ;                  }
+ 0670           L202:
+ 0670                   .dbline 330
+ 0670           ;                  
+ 0670           ;              for(b=0;b<(c+50);b++)
+ 0670 6627              clr R22
+ 0672 0CC0              xjmp L206
+ 0674           L203:
+ 0674                   .dbline 331
+ 0674           ;                  {asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");asm("nop");}
+ 0674                   .dbline 331
+ 0674 0000              nop
+ 0676                   .dbline 331
+ 0676 0000              nop
+ 0678                   .dbline 331
+ 0678 0000              nop
+ 067A                   .dbline 331
+ 067A 0000              nop
+ 067C                   .dbline 331
+ 067C 0000              nop
+ 067E                   .dbline 331
+ 067E 0000              nop
+ 0680                   .dbline 331
+ 0680 0000              nop
+ 0682                   .dbline 331
+ 0682 0000              nop
+ 0684                   .dbline 331
+ 0684 0000              nop
+ 0686                   .dbline 331
+ 0686 0000              nop
+ 0688                   .dbline 331
+ 0688 0000              nop
+ 068A                   .dbline 331
+ 068A           L204:
+ 068A                   .dbline 330
+ 068A 6395              inc R22
+ 068C           L206:
+ 068C                   .dbline 330
+ 068C 842F              mov R24,R20
+ 068E 8E5C              subi R24,206    ; addi 50
+ 0690 6817              cp R22,R24
+ 0692 80F3              brlo L203
+ 0694           X53:
+ 0694                   .dbline 332
+ 0694           ;                }      
+ 0694           L194:
+ 0694                   .dbline 314
+ 0694 4395              inc R20
+ 0696           L196:
+ 0696                   .dbline 314
+ 0696 483C              cpi R20,200
+ 0698 08F4              brsh X62
+ 069A C6CF              xjmp L193
+ 069C           X62:
+ 069C           X54:
+ 069C                   .dbline 333
+ 069C           ;          }
+ 069C           L114:
+ 069C                   .dbline 334
+ 069C           ;       }
+ 069C           L111:
+ 069C           L16:
+ 069C                   .dbline -2
+ 069C           L14:
+ 069C                   .dbline 0 ; func end
+ 069C 6991              ld R22,y+
+ 069E 4991              ld R20,y+
+ 06A0 0895              ret
+ 06A2                   .dbsym r c 20 c
+ 06A2                   .dbsym r b 22 c
+ 06A2                   .dbsym r motor 16 c
+ 06A2                   .dbend
+ 06A2                   .dbfunc e SampleADC _SampleADC fc
+ 06A2           ;           adcl -> y+0
+ 06A2           ;              c -> R10
+ 06A2           ;         ADdata -> R12,R13
+ 06A2           ;             ch -> R10
+                        .even
+ 06A2           _SampleADC::
+ 06A2 0E940000          xcall push_xgsetF03C
+ 06A6 A02E              mov R10,R16
+ 06A8 2497              sbiw R28,4
+ 06AA                   .dbline -1
+ 06AA                   .dbline 340
+ 06AA           ;       
+ 06AA           ; }
+ 06AA           ; 
+ 06AA           ;    
+ 06AA           ; unsigned char SampleADC(unsigned char ch)//耗时约5ms，返回8位有效结果
+ 06AA           ; {     unsigned char c;
+ 06AA                   .dbline 344
+ 06AA           ;       unsigned long adcl;
+ 06AA           ;         unsigned int ADdata;
+ 06AA           ; 
+ 06AA           ;         ADMUX  = (0xc0+ch);//片内2.56V基准，选择单端输入通道 
+ 06AA 8A2D              mov R24,R10
+ 06AC 8054              subi R24,64    ; addi 192
+ 06AE 87B9              out 0x7,R24
+ 06B0                   .dbline 345
+ 06B0           ;         ADCSRA =0xC3;//ADC使能，ADC开始转换，ADC自动触发使能（连续转换模式），8分频 
+ 06B0 83EC              ldi R24,195
+ 06B2 86B9              out 0x6,R24
+ 06B4                   .dbline 348
+ 06B4           ;    
+ 06B4           ;         //第一次采样值不要
+ 06B4           ;         for(ADdata=0;ADdata<100;ADdata++);
+ 06B4 CC24              clr R12
+ 06B6 DD24              clr R13
+ 06B8 03C0              xjmp L211
+ 06BA           L208:
+ 06BA                   .dbline 348
+ 06BA           L209:
+ 06BA                   .dbline 348
+ 06BA C601              movw R24,R12
+ 06BC 0196              adiw R24,1
+ 06BE 6C01              movw R12,R24
+ 06C0           L211:
+ 06C0                   .dbline 348
+ 06C0 C601              movw R24,R12
+ 06C2 8436              cpi R24,100
+ 06C4 E0E0              ldi R30,0
+ 06C6 9E07              cpc R25,R30
+ 06C8 C0F3              brlo L208
+ 06CA           X63:
+ 06CA           L212:
+ 06CA                   .dbline 349
+ 06CA           ;         while((ADCSRA&0x40)==0x40);//等待转换完成
+ 06CA           L213:
+ 06CA                   .dbline 349
+ 06CA 86B1              in R24,0x6
+ 06CC 8074              andi R24,64
+ 06CE 8034              cpi R24,64
+ 06D0 E1F3              breq L212
+ 06D2           X64:
+ 06D2                   .dbline 350
+ 06D2           ;         ADdata=ADCL;
+ 06D2 C4B0              in R12,0x4
+ 06D4 DD24              clr R13
+ 06D6                   .dbline 351
+ 06D6           ;         ADdata=ADCH;  
+ 06D6 C5B0              in R12,0x5
+ 06D8 DD24              clr R13
+ 06DA                   .dbline 353
+ 06DA           ;   
+ 06DA           ;         adcl=0;
+ 06DA 80E0              ldi R24,0
+ 06DC 8883              std y+0,R24
+ 06DE 8983              std y+1,R24
+ 06E0 8A83              std y+2,R24
+ 06E2 8B83              std y+3,R24
+ 06E4                   .dbline 354
+ 06E4           ;         for(c=0;c<32;c++)//32次值取平均
+ 06E4 AA24              clr R10
+ 06E6 2CC0              xjmp L218
+ 06E8           L215:
+ 06E8                   .dbline 355
+ 06E8           ;         {
+ 06E8                   .dbline 356
+ 06E8           ;          ADCSRA = 0xC3;//ADC使能，ADC开始转换，ADC自动触发使能（连续转换模式），8分频 
+ 06E8 83EC              ldi R24,195
+ 06EA 86B9              out 0x6,R24
+ 06EC                   .dbline 357
+ 06EC           ;          for(ADdata=0;ADdata<100;ADdata++);
+ 06EC CC24              clr R12
+ 06EE DD24              clr R13
+ 06F0 03C0              xjmp L222
+ 06F2           L219:
+ 06F2                   .dbline 357
+ 06F2           L220:
+ 06F2                   .dbline 357
+ 06F2 C601              movw R24,R12
+ 06F4 0196              adiw R24,1
+ 06F6 6C01              movw R12,R24
+ 06F8           L222:
+ 06F8                   .dbline 357
+ 06F8 C601              movw R24,R12
+ 06FA 8436              cpi R24,100
+ 06FC E0E0              ldi R30,0
+ 06FE 9E07              cpc R25,R30
+ 0700 C0F3              brlo L219
+ 0702           X65:
+ 0702           L223:
+ 0702                   .dbline 358
+ 0702           ;          while((ADCSRA&0x40)==0x40);//等待转换完成    
+ 0702           L224:
+ 0702                   .dbline 358
+ 0702 86B1              in R24,0x6
+ 0704 8074              andi R24,64
+ 0706 8034              cpi R24,64
+ 0708 E1F3              breq L223
+ 070A           X66:
+ 070A                   .dbline 359
+ 070A           ;          ADdata=ADCL;   
+ 070A C4B0              in R12,0x4
+ 070C DD24              clr R13
+ 070E                   .dbline 360
+ 070E           ;          ADdata|=(ADCH<<8);
+ 070E 25B0              in R2,0x5
+ 0710 3324              clr R3
+ 0712 322C              mov R3,R2
+ 0714 2224              clr R2
+ 0716 C228              or R12,R2
+ 0718 D328              or R13,R3
+ 071A                   .dbline 361
+ 071A           ;          ADdata&=0x03ff;//10位有效转换结果
+ 071A C601              movw R24,R12
+ 071C 9370              andi R25,3
+ 071E 6C01              movw R12,R24
+ 0720                   .dbline 362
+ 0720           ;          adcl+=ADdata;
+ 0720 1C01              movw R2,R24
+ 0722 4424              clr R4
+ 0724 5524              clr R5
+ 0726 6880              ldd R6,y+0
+ 0728 7980              ldd R7,y+1
+ 072A 8A80              ldd R8,y+2
+ 072C 9B80              ldd R9,y+3
+ 072E 620C              add R6,R2
+ 0730 731C              adc R7,R3
+ 0732 841C              adc R8,R4
+ 0734 951C              adc R9,R5
+ 0736 6882              std y+0,R6
+ 0738 7982              std y+1,R7
+ 073A 8A82              std y+2,R8
+ 073C 9B82              std y+3,R9
+ 073E                   .dbline 363
+ 073E           ;         }
+ 073E           L216:
+ 073E                   .dbline 354
+ 073E A394              inc R10
+ 0740           L218:
+ 0740                   .dbline 354
+ 0740 8A2D              mov R24,R10
+ 0742 8032              cpi R24,32
+ 0744 88F2              brlo L215
+ 0746           X67:
+ 0746                   .dbline 365
+ 0746           ; 
+ 0746           ;         adcl>>=7;//除以32，再除以4，相当于8位AD
+ 0746 87E0              ldi R24,7
+ 0748 90E0              ldi R25,0
+ 074A 0881              ldd R16,y+0
+ 074C 1981              ldd R17,y+1
+ 074E 2A81              ldd R18,y+2
+ 0750 3B81              ldd R19,y+3
+ 0752 8A93              st -y,R24
+ 0754 0E940000          xcall lsr32
+ 0758 0883              std y+0,R16
+ 075A 1983              std y+1,R17
+ 075C 2A83              std y+2,R18
+ 075E 3B83              std y+3,R19
+ 0760                   .dbline 366
+ 0760           ;         return (adcl&0x000000ff);//取8位有效位
+ 0760 4FEF              ldi R20,255
+ 0762 50E0              ldi R21,0
+ 0764 60E0              ldi R22,0
+ 0766 70E0              ldi R23,0
+ 0768 2880              ldd R2,y+0
+ 076A 3980              ldd R3,y+1
+ 076C 4A80              ldd R4,y+2
+ 076E 5B80              ldd R5,y+3
+ 0770 2422              and R2,R20
+ 0772 3522              and R3,R21
+ 0774 4622              and R4,R22
+ 0776 5722              and R5,R23
+ 0778 022D              mov R16,R2
+ 077A                   .dbline -2
+ 077A           L207:
+ 077A                   .dbline 0 ; func end
+ 077A 2496              adiw R28,4
+ 077C 0C940000          xjmp pop_xgsetF03C
+ 0780                   .dbsym l adcl 0 l
+ 0780                   .dbsym r c 10 c
+ 0780                   .dbsym r ADdata 12 i
+ 0780                   .dbsym r ch 10 c
+ 0780                   .dbend
+ 0780                   .dbfunc e CheckMotor _CheckMotor fV
+ 0780           ;              n -> R12,R13
+ 0780           ;              f -> y+0
+ 0780           ;              a -> R12
+ 0780           ;              t -> R10,R11
+                        .even
+ 0780           _CheckMotor::
+ 0780 0E940000          xcall push_xgsetF03C
+ 0784 5801              movw R10,R16
+ 0786 2497              sbiw R28,4
+ 0788                   .dbline -1
+ 0788                   .dbline 370
+ 0788           ; }
+ 0788           ; 
+ 0788           ; void CheckMotor(unsigned int t)//电机不转时耗时5us，最大定时8388ms，参数t为定时时间，单位ms
+ 0788           ; {   //电机电流单片机采样管脚上，没开电机时约70mV，开电机后空载时约80mV，于是下文需要把这个零位减掉。 
+ 0788                   .dbline 374
+ 0788           ;     float f;
+ 0788           ;       unsigned char a;
+ 0788           ;     unsigned int n;
+ 0788           ;     TCCR1B = 0x00; //stop
+ 0788 2224              clr R2
+ 078A 2EBC              out 0x2e,R2
+ 078C                   .dbline 375
+ 078C           ;       if(t>8388)
+ 078C 84EC              ldi R24,8388
+ 078E 90E2              ldi R25,32
+ 0790 8A15              cp R24,R10
+ 0792 9B05              cpc R25,R11
+ 0794 08F4              brsh L227
+ 0796           X68:
+ 0796                   .dbline 376
+ 0796           ;          t=8388;
+ 0796 5C01              movw R10,R24
+ 0798           L227:
+ 0798                   .dbline 377
+ 0798           ;       f=t;
+ 0798 8501              movw R16,R10
+ 079A 0E940000          xcall uint2fp
+ 079E 0883              std y+0,R16
+ 07A0 1983              std y+1,R17
+ 07A2 2A83              std y+2,R18
+ 07A4 3B83              std y+3,R19
+ 07A6                   .dbline 378
+ 07A6           ;       f*=7.8125;
+ 07A6 00E0              ldi R16,<L229
+ 07A8 10E0              ldi R17,>L229
+ 07AA 0E940000          xcall elpm32
+ 07AE CE01              movw R24,R28
+ 07B0 9A93              st -y,R25
+ 07B2 8A93              st -y,R24
+ 07B4 0E940000          xcall fpmule1
+ 07B8 0883              std y+0,R16
+ 07BA 1983              std y+1,R17
+ 07BC 2A83              std y+2,R18
+ 07BE 3B83              std y+3,R19
+ 07C0                   .dbline 379
+ 07C0           ;       n=f;
+ 07C0 0881              ldd R16,y+0
+ 07C2 1981              ldd R17,y+1
+ 07C4 2A81              ldd R18,y+2
+ 07C6 3B81              ldd R19,y+3
+ 07C8 0E940000          xcall fpint
+ 07CC 6801              movw R12,R16
+ 07CE                   .dbline 380
+ 07CE           ;     TCNT1 = 65535-n;  
+ 07CE 1601              movw R2,R12
+ 07D0 4424              clr R4
+ 07D2 5524              clr R5
+ 07D4 4FEF              ldi R20,255
+ 07D6 5FEF              ldi R21,255
+ 07D8 60E0              ldi R22,0
+ 07DA 70E0              ldi R23,0
+ 07DC 4219              sub R20,R2
+ 07DE 5309              sbc R21,R3
+ 07E0 6409              sbc R22,R4
+ 07E2 7509              sbc R23,R5
+ 07E4 5DBD              out 0x2d,R21
+ 07E6 4CBD              out 0x2c,R20
+ 07E8                   .dbline 381
+ 07E8           ;       TIFR |= 0x04; //清定时器1中断标志 
+ 07E8 86B7              in R24,0x36
+ 07EA 8460              ori R24,4
+ 07EC 86BF              out 0x36,R24
+ 07EE                   .dbline 382
+ 07EE           ;       TCCR1B = 0x05; //1024分频
+ 07EE 85E0              ldi R24,5
+ 07F0 8EBD              out 0x2e,R24
+ 07F2 1DC1              xjmp L231
+ 07F4           L230:
+ 07F4                   .dbline 385
+ 07F4           ;       
+ 07F4           ;    while((TIFR&0x04)==0x00)//定时中断到来前一直采样监测电流
+ 07F4           ;    {   
+ 07F4                   .dbline 386
+ 07F4           ;     if( Motor1Status.s.RUN==1 )//收放电机运行时才实时检测电流，否则电流保存最后一次的测试值
+ 07F4 80910B00          lds R24,_Motor1Status
+ 07F8 90910C00          lds R25,_Motor1Status+1
+ 07FC 8170              andi R24,1
+ 07FE 9070              andi R25,0
+ 0800 8130              cpi R24,1
+ 0802 E0E0              ldi R30,0
+ 0804 9E07              cpc R25,R30
+ 0806 09F0              breq X79
+ 0808 81C0              xjmp L233
+ 080A           X79:
+ 080A           X69:
+ 080A                   .dbline 387
+ 080A           ;     {
+ 080A                   .dbline 388
+ 080A           ;         a=SampleADC(0);
+ 080A 0027              clr R16
+ 080C 4ADF              xcall _SampleADC
+ 080E C02E              mov R12,R16
+ 0810                   .dbline 389
+ 0810           ;         if(a>5){a-=5;}// 减掉硬件零位，每个数字量代表10mV，单片机的ADC采样偏小，于是在这儿只抵消50m即可。
+ 0810 85E0              ldi R24,5
+ 0812 8017              cp R24,R16
+ 0814 20F4              brsh L235
+ 0816           X70:
+ 0816                   .dbline 389
+ 0816                   .dbline 389
+ 0816 8C2D              mov R24,R12
+ 0818 8550              subi R24,5
+ 081A C82E              mov R12,R24
+ 081C                   .dbline 389
+ 081C 01C0              xjmp L236
+ 081E           L235:
+ 081E                   .dbline 390
+ 081E           ;         else{a=0;}
+ 081E                   .dbline 390
+ 081E CC24              clr R12
+ 0820                   .dbline 390
+ 0820           L236:
+ 0820                   .dbline 392
+ 0820           ;         
+ 0820           ;       if(a>Motor1Thr)//过流关电机
+ 0820 20900600          lds R2,_Motor1Thr
+ 0824 3324              clr R3
+ 0826 4C2C              mov R4,R12
+ 0828 5524              clr R5
+ 082A 2414              cp R2,R4
+ 082C 3504              cpc R3,R5
+ 082E 04F5              brge L237
+ 0830           X71:
+ 0830                   .dbline 393
+ 0830           ;       {
+ 0830                   .dbline 394
+ 0830           ;          MOTORSTOP//关电机   
+ 0830                   .dbline 394
+ 0830 9698              cbi 0x12,6
+ 0832                   .dbline 394
+ 0832 9798              cbi 0x12,7
+ 0834                   .dbline 394
+ 0834 DA98              cbi 0x1b,2
+ 0836                   .dbline 394
+ 0836 DB98              cbi 0x1b,3
+ 0838                   .dbline 394
+ 0838 DE98              cbi 0x1b,6
+ 083A                   .dbline 394
+ 083A 80916500          lds R24,101
+ 083E 8D7F              andi R24,253
+ 0840 80936500          sts 101,R24
+ 0844                   .dbline 394
+ 0844 80916500          lds R24,101
+ 0848 8E7F              andi R24,254
+ 084A 80936500          sts 101,R24
+ 084E                   .dbline 394
+ 084E DC98              cbi 0x1b,4
+ 0850                   .dbline 394
+ 0850 DD98              cbi 0x1b,5
+ 0852                   .dbline 394
+ 0852                   .dbline 395
+ 0852           ;        Motor1Status.s.OverCurrent=1;//过流状态置1，表示电机上次停止原因为过流停
+ 0852 80910B00          lds R24,_Motor1Status
+ 0856 90910C00          lds R25,_Motor1Status+1
+ 085A 8061              ori R24,16
+ 085C 90930C00          sts _Motor1Status+1,R25
+ 0860 80930B00          sts _Motor1Status,R24
+ 0864                   .dbline 396
+ 0864           ;          Motor1Status.s.RUN=0;//停止状态
+ 0864 8E7F              andi R24,254
+ 0866 90930C00          sts _Motor1Status+1,R25
+ 086A 80930B00          sts _Motor1Status,R24
+ 086E                   .dbline 397
+ 086E           ;         }
+ 086E 23C0              xjmp L238
+ 0870           L237:
+ 0870                   .dbline 398
+ 0870           ;         else if(a<MotorIdelCur)//断路关电机 
+ 0870 20900300          lds R2,_MotorIdelCur
+ 0874 C214              cp R12,R2
+ 0876 F8F4              brsh L239
+ 0878           X72:
+ 0878                   .dbline 399
+ 0878           ;         {   
+ 0878                   .dbline 400
+ 0878           ;          MOTORSTOP//关电机
+ 0878                   .dbline 400
+ 0878 9698              cbi 0x12,6
+ 087A                   .dbline 400
+ 087A 9798              cbi 0x12,7
+ 087C                   .dbline 400
+ 087C DA98              cbi 0x1b,2
+ 087E                   .dbline 400
+ 087E DB98              cbi 0x1b,3
+ 0880                   .dbline 400
+ 0880 DE98              cbi 0x1b,6
+ 0882                   .dbline 400
+ 0882 80916500          lds R24,101
+ 0886 8D7F              andi R24,253
+ 0888 80936500          sts 101,R24
+ 088C                   .dbline 400
+ 088C 80916500          lds R24,101
+ 0890 8E7F              andi R24,254
+ 0892 80936500          sts 101,R24
+ 0896                   .dbline 400
+ 0896 DC98              cbi 0x1b,4
+ 0898                   .dbline 400
+ 0898 DD98              cbi 0x1b,5
+ 089A                   .dbline 400
+ 089A                   .dbline 401
+ 089A           ;        Motor1Status.s.BrokenStop=1;//断路状态置1，表示电机上次停止原因为断路停
+ 089A 80910B00          lds R24,_Motor1Status
+ 089E 90910C00          lds R25,_Motor1Status+1
+ 08A2 8460              ori R24,4
+ 08A4 90930C00          sts _Motor1Status+1,R25
+ 08A8 80930B00          sts _Motor1Status,R24
+ 08AC                   .dbline 402
+ 08AC           ;          Motor1Status.s.RUN=0;//停止状态
+ 08AC 8E7F              andi R24,254
+ 08AE 90930C00          sts _Motor1Status+1,R25
+ 08B2 80930B00          sts _Motor1Status,R24
+ 08B6                   .dbline 403
+ 08B6           ;         }
+ 08B6           L239:
+ 08B6           L238:
+ 08B6                   .dbline 405
+ 08B6           ;         
+ 08B6           ;         f=a;
+ 08B6 0C2D              mov R16,R12
+ 08B8 1127              clr R17
+ 08BA 0E940000          xcall int2fp
+ 08BE 0883              std y+0,R16
+ 08C0 1983              std y+1,R17
+ 08C2 2A83              std y+2,R18
+ 08C4 3B83              std y+3,R19
+ 08C6                   .dbline 406
+ 08C6           ;         f*=1.087;//按采样电阻1.2欧，放大倍数7.667，8位AD，2.56V参考计算
+ 08C6 00E0              ldi R16,<L241
+ 08C8 10E0              ldi R17,>L241
+ 08CA 0E940000          xcall elpm32
+ 08CE CE01              movw R24,R28
+ 08D0 9A93              st -y,R25
+ 08D2 8A93              st -y,R24
+ 08D4 0E940000          xcall fpmule1
+ 08D8 0883              std y+0,R16
+ 08DA 1983              std y+1,R17
+ 08DC 2A83              std y+2,R18
+ 08DE 3B83              std y+3,R19
+ 08E0                   .dbline 407
+ 08E0           ;         Motor1Status.s.ThisCurrent=f;
+ 08E0 0881              ldd R16,y+0
+ 08E2 1981              ldd R17,y+1
+ 08E4 2A81              ldd R18,y+2
+ 08E6 3B81              ldd R19,y+3
+ 08E8 0E940000          xcall fpint
+ 08EC C801              movw R24,R16
+ 08EE 9070              andi R25,0
+ 08F0 982F              mov R25,R24
+ 08F2 8827              clr R24
+ 08F4 8070              andi R24,0
+ 08F6 E0910B00          lds R30,_Motor1Status
+ 08FA F0910C00          lds R31,_Motor1Status+1
+ 08FE F070              andi R31,0
+ 0900 E82B              or R30,R24
+ 0902 F92B              or R31,R25
+ 0904 F0930C00          sts _Motor1Status+1,R31
+ 0908 E0930B00          sts _Motor1Status,R30
+ 090C                   .dbline 408
+ 090C           ;     }
+ 090C           L233:
+ 090C                   .dbline 410
+ 090C           ;    
+ 090C           ;     if( Motor2Status.s.RUN==1 )//调节电机运行时才实时检测电流，否则电流保存最后一次的测试值
+ 090C 80910900          lds R24,_Motor2Status
+ 0910 90910A00          lds R25,_Motor2Status+1
+ 0914 8170              andi R24,1
+ 0916 9070              andi R25,0
+ 0918 8130              cpi R24,1
+ 091A E0E0              ldi R30,0
+ 091C 9E07              cpc R25,R30
+ 091E 09F0              breq X80
+ 0920 81C0              xjmp L242
+ 0922           X80:
+ 0922           X73:
+ 0922                   .dbline 411
+ 0922           ;     {
+ 0922                   .dbline 412
+ 0922           ;        a=SampleADC(1);        
+ 0922 01E0              ldi R16,1
+ 0924 BEDE              xcall _SampleADC
+ 0926 C02E              mov R12,R16
+ 0928                   .dbline 413
+ 0928           ;        if(a>5){a-=5;}// 减掉硬件零位，每个数字量代表10mV，单片机的ADC采样偏小，于是在这儿只抵消50m即可。
+ 0928 85E0              ldi R24,5
+ 092A 8017              cp R24,R16
+ 092C 20F4              brsh L244
+ 092E           X74:
+ 092E                   .dbline 413
+ 092E                   .dbline 413
+ 092E 8C2D              mov R24,R12
+ 0930 8550              subi R24,5
+ 0932 C82E              mov R12,R24
+ 0934                   .dbline 413
+ 0934 01C0              xjmp L245
+ 0936           L244:
+ 0936                   .dbline 414
+ 0936           ;         else{a=0;}
+ 0936                   .dbline 414
+ 0936 CC24              clr R12
+ 0938                   .dbline 414
+ 0938           L245:
+ 0938                   .dbline 416
+ 0938           ;         
+ 0938           ;      if(a>Motor2Thr)//过流关电机
+ 0938 20900500          lds R2,_Motor2Thr
+ 093C 3324              clr R3
+ 093E 4C2C              mov R4,R12
+ 0940 5524              clr R5
+ 0942 2414              cp R2,R4
+ 0944 3504              cpc R3,R5
+ 0946 04F5              brge L246
+ 0948           X75:
+ 0948                   .dbline 417
+ 0948           ;      {
+ 0948                   .dbline 418
+ 0948           ;          MOTORSTOP//关电机
+ 0948                   .dbline 418
+ 0948 9698              cbi 0x12,6
+ 094A                   .dbline 418
+ 094A 9798              cbi 0x12,7
+ 094C                   .dbline 418
+ 094C DA98              cbi 0x1b,2
+ 094E                   .dbline 418
+ 094E DB98              cbi 0x1b,3
+ 0950                   .dbline 418
+ 0950 DE98              cbi 0x1b,6
+ 0952                   .dbline 418
+ 0952 80916500          lds R24,101
+ 0956 8D7F              andi R24,253
+ 0958 80936500          sts 101,R24
+ 095C                   .dbline 418
+ 095C 80916500          lds R24,101
+ 0960 8E7F              andi R24,254
+ 0962 80936500          sts 101,R24
+ 0966                   .dbline 418
+ 0966 DC98              cbi 0x1b,4
+ 0968                   .dbline 418
+ 0968 DD98              cbi 0x1b,5
+ 096A                   .dbline 418
+ 096A                   .dbline 419
+ 096A           ;        Motor2Status.s.OverCurrent=1;//过流状态置1，表示电机上次停止原因为过流停
+ 096A 80910900          lds R24,_Motor2Status
+ 096E 90910A00          lds R25,_Motor2Status+1
+ 0972 8061              ori R24,16
+ 0974 90930A00          sts _Motor2Status+1,R25
+ 0978 80930900          sts _Motor2Status,R24
+ 097C                   .dbline 420
+ 097C           ;          Motor2Status.s.RUN=0;//停止状态
+ 097C 8E7F              andi R24,254
+ 097E 90930A00          sts _Motor2Status+1,R25
+ 0982 80930900          sts _Motor2Status,R24
+ 0986                   .dbline 421
+ 0986           ;        } 
+ 0986 23C0              xjmp L247
+ 0988           L246:
+ 0988                   .dbline 422
+ 0988           ;        else if(a<MotorIdelCur) //断路关电机，电流小于xx mA认为是断路
+ 0988 20900300          lds R2,_MotorIdelCur
+ 098C C214              cp R12,R2
+ 098E F8F4              brsh L248
+ 0990           X76:
+ 0990                   .dbline 423
+ 0990           ;        {
+ 0990                   .dbline 424
+ 0990           ;          MOTORSTOP//关电机
+ 0990                   .dbline 424
+ 0990 9698              cbi 0x12,6
+ 0992                   .dbline 424
+ 0992 9798              cbi 0x12,7
+ 0994                   .dbline 424
+ 0994 DA98              cbi 0x1b,2
+ 0996                   .dbline 424
+ 0996 DB98              cbi 0x1b,3
+ 0998                   .dbline 424
+ 0998 DE98              cbi 0x1b,6
+ 099A                   .dbline 424
+ 099A 80916500          lds R24,101
+ 099E 8D7F              andi R24,253
+ 09A0 80936500          sts 101,R24
+ 09A4                   .dbline 424
+ 09A4 80916500          lds R24,101
+ 09A8 8E7F              andi R24,254
+ 09AA 80936500          sts 101,R24
+ 09AE                   .dbline 424
+ 09AE DC98              cbi 0x1b,4
+ 09B0                   .dbline 424
+ 09B0 DD98              cbi 0x1b,5
+ 09B2                   .dbline 424
+ 09B2                   .dbline 425
+ 09B2           ;        Motor2Status.s.BrokenStop=1;//断路状态置1，表示电机上次停止原因为断路停
+ 09B2 80910900          lds R24,_Motor2Status
+ 09B6 90910A00          lds R25,_Motor2Status+1
+ 09BA 8460              ori R24,4
+ 09BC 90930A00          sts _Motor2Status+1,R25
+ 09C0 80930900          sts _Motor2Status,R24
+ 09C4                   .dbline 426
+ 09C4           ;          Motor2Status.s.RUN=0;//停止状态
+ 09C4 8E7F              andi R24,254
+ 09C6 90930A00          sts _Motor2Status+1,R25
+ 09CA 80930900          sts _Motor2Status,R24
+ 09CE                   .dbline 427
+ 09CE           ;        }
+ 09CE           L248:
+ 09CE           L247:
+ 09CE                   .dbline 429
+ 09CE           ; 
+ 09CE           ;         f=a;
+ 09CE 0C2D              mov R16,R12
+ 09D0 1127              clr R17
+ 09D2 0E940000          xcall int2fp
+ 09D6 0883              std y+0,R16
+ 09D8 1983              std y+1,R17
+ 09DA 2A83              std y+2,R18
+ 09DC 3B83              std y+3,R19
+ 09DE                   .dbline 430
+ 09DE           ;         f*=1.087;//按采样电阻1.2欧，放大倍数7.667，8位AD，2.56V参考计算
+ 09DE 00E0              ldi R16,<L241
+ 09E0 10E0              ldi R17,>L241
+ 09E2 0E940000          xcall elpm32
+ 09E6 CE01              movw R24,R28
+ 09E8 9A93              st -y,R25
+ 09EA 8A93              st -y,R24
+ 09EC 0E940000          xcall fpmule1
+ 09F0 0883              std y+0,R16
+ 09F2 1983              std y+1,R17
+ 09F4 2A83              std y+2,R18
+ 09F6 3B83              std y+3,R19
+ 09F8                   .dbline 431
+ 09F8           ;         Motor2Status.s.ThisCurrent=f;
+ 09F8 0881              ldd R16,y+0
+ 09FA 1981              ldd R17,y+1
+ 09FC 2A81              ldd R18,y+2
+ 09FE 3B81              ldd R19,y+3
+ 0A00 0E940000          xcall fpint
+ 0A04 C801              movw R24,R16
+ 0A06 9070              andi R25,0
+ 0A08 982F              mov R25,R24
+ 0A0A 8827              clr R24
+ 0A0C 8070              andi R24,0
+ 0A0E E0910900          lds R30,_Motor2Status
+ 0A12 F0910A00          lds R31,_Motor2Status+1
+ 0A16 F070              andi R31,0
+ 0A18 E82B              or R30,R24
+ 0A1A F92B              or R31,R25
+ 0A1C F0930A00          sts _Motor2Status+1,R31
+ 0A20 E0930900          sts _Motor2Status,R30
+ 0A24                   .dbline 432
+ 0A24           ;     }
+ 0A24           L242:
+ 0A24                   .dbline 434
+ 0A24           ; 
+ 0A24           ;     if(t==0){break;}//不定时则检测一次电机状态后直接跳出
+ 0A24 AA20              tst R10
+ 0A26 19F4              brne L250
+ 0A28 BB20              tst R11
+ 0A2A 09F4              brne L250
+ 0A2C           X77:
+ 0A2C                   .dbline 434
+ 0A2C                   .dbline 434
+ 0A2C 03C0              xjmp L232
+ 0A2E           L250:
+ 0A2E                   .dbline 435
+ 0A2E           ;    } 
+ 0A2E           L231:
+ 0A2E                   .dbline 384
+ 0A2E 26B6              in R2,0x36
+ 0A30 22FE              sbrs R2,2
+ 0A32 E0CE              rjmp L230
+ 0A34           X78:
+ 0A34           L232:
+ 0A34                   .dbline 437
+ 0A34           ;    
+ 0A34           ;    TCCR1B = 0x00; //stop
+ 0A34 2224              clr R2
+ 0A36 2EBC              out 0x2e,R2
+ 0A38                   .dbline -2
+ 0A38           L226:
+ 0A38                   .dbline 0 ; func end
+ 0A38 2496              adiw R28,4
+ 0A3A 0C940000          xjmp pop_xgsetF03C
+ 0A3E                   .dbsym r n 12 i
+ 0A3E                   .dbsym l f 0 D
+ 0A3E                   .dbsym r a 12 c
+ 0A3E                   .dbsym r t 10 i
+ 0A3E                   .dbend
+ 0A3E                   .dbfunc e Start _Start fV
+                        .even
+ 0A3E           _Start::
+ 0A3E                   .dbline -1
+ 0A3E                   .dbline 442
+ 0A3E           ; }
+ 0A3E           ; 
+ 0A3E           ; 
+ 0A3E           ; void Start(void)
+ 0A3E           ; {
+ 0A3E                   .dbline 443
+ 0A3E           ;  InitialIO();
+ 0A3E E0DA              xcall _InitialIO
+ 0A40                   .dbline 444
+ 0A40           ;  uart1_init();
+ 0A40 ECDA              xcall _uart1_init
+ 0A42                   .dbline 446
+ 0A42           ;  
+ 0A42           ;  MOTORSTOP//关电机
+ 0A42                   .dbline 446
+ 0A42 9698              cbi 0x12,6
+ 0A44                   .dbline 446
+ 0A44 9798              cbi 0x12,7
+ 0A46                   .dbline 446
+ 0A46 DA98              cbi 0x1b,2
+ 0A48                   .dbline 446
+ 0A48 DB98              cbi 0x1b,3
+ 0A4A                   .dbline 446
+ 0A4A DE98              cbi 0x1b,6
+ 0A4C                   .dbline 446
+ 0A4C 80916500          lds R24,101
+ 0A50 8D7F              andi R24,253
+ 0A52 80936500          sts 101,R24
+ 0A56                   .dbline 446
+ 0A56 80916500          lds R24,101
+ 0A5A 8E7F              andi R24,254
+ 0A5C 80936500          sts 101,R24
+ 0A60                   .dbline 446
+ 0A60 DC98              cbi 0x1b,4
+ 0A62                   .dbline 446
+ 0A62 DD98              cbi 0x1b,5
+ 0A64                   .dbline 446
+ 0A64                   .dbline 448
+ 0A64           ;  
+ 0A64           ;  Motor1Status.s.RUN=0; 
+ 0A64 80910B00          lds R24,_Motor1Status
+ 0A68 90910C00          lds R25,_Motor1Status+1
+ 0A6C 8E7F              andi R24,254
+ 0A6E 90930C00          sts _Motor1Status+1,R25
+ 0A72 80930B00          sts _Motor1Status,R24
+ 0A76                   .dbline 449
+ 0A76           ;  Motor1Status.s.DIR=0;
+ 0A76 8D7F              andi R24,253
+ 0A78 90930C00          sts _Motor1Status+1,R25
+ 0A7C 80930B00          sts _Motor1Status,R24
+ 0A80                   .dbline 450
+ 0A80           ;  Motor1Status.s.BrokenStop=0;
+ 0A80 8B7F              andi R24,251
+ 0A82 90930C00          sts _Motor1Status+1,R25
+ 0A86 80930B00          sts _Motor1Status,R24
+ 0A8A                   .dbline 451
+ 0A8A           ;  Motor1Status.s.CommandStop=0;
+ 0A8A 877F              andi R24,247
+ 0A8C 90930C00          sts _Motor1Status+1,R25
+ 0A90 80930B00          sts _Motor1Status,R24
+ 0A94                   .dbline 452
+ 0A94           ;  Motor1Status.s.OverCurrent=0;
+ 0A94 8F7E              andi R24,239
+ 0A96 90930C00          sts _Motor1Status+1,R25
+ 0A9A 80930B00          sts _Motor1Status,R24
+ 0A9E                   .dbline 453
+ 0A9E           ;  Motor1Status.s.UnderVoltage=0;
+ 0A9E 8F7D              andi R24,223
+ 0AA0 90930C00          sts _Motor1Status+1,R25
+ 0AA4 80930B00          sts _Motor1Status,R24
+ 0AA8                   .dbline 454
+ 0AA8           ;  Motor1Status.s.StartResult=0;
+ 0AA8 8F73              andi R24,63
+ 0AAA 90930C00          sts _Motor1Status+1,R25
+ 0AAE 80930B00          sts _Motor1Status,R24
+ 0AB2                   .dbline 455
+ 0AB2           ;  Motor1Status.s.ThisCurrent=0;
+ 0AB2 9070              andi R25,0
+ 0AB4 90930C00          sts _Motor1Status+1,R25
+ 0AB8 80930B00          sts _Motor1Status,R24
+ 0ABC                   .dbline 457
+ 0ABC           ;  
+ 0ABC           ;  Motor2Status.s.RUN=0; 
+ 0ABC 80910900          lds R24,_Motor2Status
+ 0AC0 90910A00          lds R25,_Motor2Status+1
+ 0AC4 8E7F              andi R24,254
+ 0AC6 90930A00          sts _Motor2Status+1,R25
+ 0ACA 80930900          sts _Motor2Status,R24
+ 0ACE                   .dbline 458
+ 0ACE           ;  Motor2Status.s.DIR=0;
+ 0ACE 8D7F              andi R24,253
+ 0AD0 90930A00          sts _Motor2Status+1,R25
+ 0AD4 80930900          sts _Motor2Status,R24
+ 0AD8                   .dbline 459
+ 0AD8           ;  Motor2Status.s.BrokenStop=0;
+ 0AD8 8B7F              andi R24,251
+ 0ADA 90930A00          sts _Motor2Status+1,R25
+ 0ADE 80930900          sts _Motor2Status,R24
+ 0AE2                   .dbline 460
+ 0AE2           ;  Motor2Status.s.CommandStop=0;
+ 0AE2 877F              andi R24,247
+ 0AE4 90930A00          sts _Motor2Status+1,R25
+ 0AE8 80930900          sts _Motor2Status,R24
+ 0AEC                   .dbline 461
+ 0AEC           ;  Motor2Status.s.OverCurrent=0;
+ 0AEC 8F7E              andi R24,239
+ 0AEE 90930A00          sts _Motor2Status+1,R25
+ 0AF2 80930900          sts _Motor2Status,R24
+ 0AF6                   .dbline 462
+ 0AF6           ;  Motor2Status.s.UnderVoltage=0;
+ 0AF6 8F7D              andi R24,223
+ 0AF8 90930A00          sts _Motor2Status+1,R25
+ 0AFC 80930900          sts _Motor2Status,R24
+ 0B00                   .dbline 463
+ 0B00           ;  Motor2Status.s.StartResult=0;
+ 0B00 8F73              andi R24,63
+ 0B02 90930A00          sts _Motor2Status+1,R25
+ 0B06 80930900          sts _Motor2Status,R24
+ 0B0A                   .dbline 464
+ 0B0A           ;  Motor2Status.s.ThisCurrent=0;
+ 0B0A 9070              andi R25,0
+ 0B0C 90930A00          sts _Motor2Status+1,R25
+ 0B10 80930900          sts _Motor2Status,R24
+ 0B14                   .dbline 466
+ 0B14           ;  
+ 0B14           ;  IntFlag=0;//无接收帧中断
+ 0B14 2224              clr R2
+ 0B16 20920100          sts _IntFlag,R2
+ 0B1A                   .dbline 468
+ 0B1A           ;  
+ 0B1A           ;  ACSR|=0x10;//清模拟比较器中断标志
+ 0B1A 449A              sbi 0x8,4
+ 0B1C                   .dbline 469
+ 0B1C           ;  ACSR&=0xf7;//关模拟比较器中断
+ 0B1C 88B1              in R24,0x8
+ 0B1E 877F              andi R24,247
+ 0B20 88B9              out 0x8,R24
+ 0B22                   .dbline 470
+ 0B22           ;  ACSR|=0x40;//ACBG置位，模拟比较器正级接内部能隙基准1.23V
+ 0B22 469A              sbi 0x8,6
+ 0B24                   .dbline 471
+ 0B24           ;  ACSR|=0x03;//开模拟比较器,AIN1连到比较器负极，0:比较器输出变化即中断，1：保留，2：下降沿中断，3:上升沿中断   
+ 0B24 88B1              in R24,0x8
+ 0B26 8360              ori R24,3
+ 0B28 88B9              out 0x8,R24
+ 0B2A                   .dbline 472
+ 0B2A           ;  ACSR|=0x08;//开模拟比较器中断，任何时候都要进行欠压监测      
+ 0B2A 439A              sbi 0x8,3
+ 0B2C                   .dbline 473
+ 0B2C           ;  ACSR|=0x10;//清模拟比较器中断标志    
+ 0B2C 449A              sbi 0x8,4
+ 0B2E                   .dbline 475
+ 0B2E           ;       
+ 0B2E           ;  INT_EN
+ 0B2E                   .dbline 475
+ 0B2E 7894              sei
+ 0B30                   .dbline 475
+ 0B30                   .dbline -2
+ 0B30           L252:
+ 0B30                   .dbline 0 ; func end
+ 0B30 0895              ret
+ 0B32                   .dbend
+ 0B32                   .dbfunc e Gear2Thr _Gear2Thr fV
+                        .even
+ 0B32           _Gear2Thr::
+ 0B32                   .dbline -1
+ 0B32                   .dbline 479
+ 0B32           ; }
+ 0B32           ; 
+ 0B32           ; void Gear2Thr(void)
+ 0B32           ; {
+ 0B32                   .dbline 482
+ 0B32           ;   //按采样电阻1.2欧，放大倍数7.667，8位AD，2.56V参考计算，每个采样字表示1.087mA
+ 0B32           ; //将电机过流档位换算为数字量，方便中断函数中进行比较运算
+ 0B32           ;   if(Motor1Gear<1) {Motor1Gear=1;}//堵转电流最小为1档
+ 0B32 80910800          lds R24,_Motor1Gear
+ 0B36 8130              cpi R24,1
+ 0B38 18F4              brsh L254
+ 0B3A           X81:
+ 0B3A                   .dbline 482
+ 0B3A                   .dbline 482
+ 0B3A 81E0              ldi R24,1
+ 0B3C 80930800          sts _Motor1Gear,R24
+ 0B40                   .dbline 482
+ 0B40           L254:
+ 0B40                   .dbline 483
+ 0B40           ;   if(Motor1Gear>6) {Motor1Gear=6;}//堵转电流最大为6档
+ 0B40 86E0              ldi R24,6
+ 0B42 20900800          lds R2,_Motor1Gear
+ 0B46 8215              cp R24,R2
+ 0B48 10F4              brsh L256
+ 0B4A           X82:
+ 0B4A                   .dbline 483
+ 0B4A                   .dbline 483
+ 0B4A 80930800          sts _Motor1Gear,R24
+ 0B4E                   .dbline 483
+ 0B4E           L256:
+ 0B4E                   .dbline 484
+ 0B4E           ;   if(Motor2Gear<1) {Motor2Gear=1;}//堵转电流最小为1档
+ 0B4E 80910700          lds R24,_Motor2Gear
+ 0B52 8130              cpi R24,1
+ 0B54 18F4              brsh L258
+ 0B56           X83:
+ 0B56                   .dbline 484
+ 0B56                   .dbline 484
+ 0B56 81E0              ldi R24,1
+ 0B58 80930700          sts _Motor2Gear,R24
+ 0B5C                   .dbline 484
+ 0B5C           L258:
+ 0B5C                   .dbline 485
+ 0B5C           ;   if(Motor2Gear>6) {Motor2Gear=6;}//堵转电流最大为6档
+ 0B5C 86E0              ldi R24,6
+ 0B5E 20900700          lds R2,_Motor2Gear
+ 0B62 8215              cp R24,R2
+ 0B64 10F4              brsh L260
+ 0B66           X84:
+ 0B66                   .dbline 485
+ 0B66                   .dbline 485
+ 0B66 80930700          sts _Motor2Gear,R24
+ 0B6A                   .dbline 485
+ 0B6A           L260:
+ 0B6A                   .dbline 487
+ 0B6A           ;   //第1档从100mA起步，每档差值30mA,第6档约250mA
+ 0B6A           ;   Motor1Thr= 108+ (Motor1Gear-1)*27;
+ 0B6A 10910800          lds R17,_Motor1Gear
+ 0B6E 0BE1              ldi R16,27
+ 0B70 0103              mulsu R16,R17
+ 0B72 802D              mov R24,R0
+ 0B74 8B51              subi R24,27
+ 0B76 8459              subi R24,148    ; addi 108
+ 0B78 80930600          sts _Motor1Thr,R24
+ 0B7C                   .dbline 488
+ 0B7C           ;   Motor2Thr= 108+ (Motor2Gear-1)*27;
+ 0B7C 10910700          lds R17,_Motor2Gear
+ 0B80 0103              mulsu R16,R17
+ 0B82 802D              mov R24,R0
+ 0B84 8B51              subi R24,27
+ 0B86 8459              subi R24,148    ; addi 108
+ 0B88 80930500          sts _Motor2Thr,R24
+ 0B8C                   .dbline 490
+ 0B8C           ;   
+ 0B8C           ;   if(MotorIdelGear<1){MotorIdelGear=1;}//电机断路电流最小1档
+ 0B8C 80910400          lds R24,_MotorIdelGear
+ 0B90 8130              cpi R24,1
+ 0B92 18F4              brsh L262
+ 0B94           X85:
+ 0B94                   .dbline 490
+ 0B94                   .dbline 490
+ 0B94 81E0              ldi R24,1
+ 0B96 80930400          sts _MotorIdelGear,R24
+ 0B9A                   .dbline 490
+ 0B9A           L262:
+ 0B9A                   .dbline 491
+ 0B9A           ;   if(MotorIdelGear>6){MotorIdelGear=6;}//电机断路电流最大6档
+ 0B9A 86E0              ldi R24,6
+ 0B9C 20900400          lds R2,_MotorIdelGear
+ 0BA0 8215              cp R24,R2
+ 0BA2 10F4              brsh L264
+ 0BA4           X86:
+ 0BA4                   .dbline 491
+ 0BA4                   .dbline 491
+ 0BA4 80930400          sts _MotorIdelGear,R24
+ 0BA8                   .dbline 491
+ 0BA8           L264:
+ 0BA8                   .dbline 493
+ 0BA8           ;   //从10mA起步，最大60mA
+ 0BA8           ;   MotorIdelCur=(MotorIdelGear-1)*11+10;
+ 0BA8 10910400          lds R17,_MotorIdelGear
+ 0BAC 0BE0              ldi R16,11
+ 0BAE 0103              mulsu R16,R17
+ 0BB0 802D              mov R24,R0
+ 0BB2 8B50              subi R24,11
+ 0BB4 865F              subi R24,246    ; addi 10
+ 0BB6 80930300          sts _MotorIdelCur,R24
+ 0BBA                   .dbline -2
+ 0BBA           L253:
+ 0BBA                   .dbline 0 ; func end
+ 0BBA 0895              ret
+ 0BBC                   .dbend
+ 0BBC                   .dbfunc e main _main fV
+ 0BBC           ;              f -> y+4
+ 0BBC           ;              i -> R10
+ 0BBC           ;              l -> y+0
+ 0BBC           ;              j -> R12,R13
+                        .even
+ 0BBC           _main::
+ 0BBC 2897              sbiw R28,8
+ 0BBE                   .dbline -1
+ 0BBE                   .dbline 498
+ 0BBE           ;   
+ 0BBE           ; }
+ 0BBE           ; 
+ 0BBE           ; void main(void)
+ 0BBE           ; { 
+ 0BBE                   .dbline 504
+ 0BBE           ;   unsigned char i;
+ 0BBE           ;   unsigned int j;
+ 0BBE           ;   unsigned long l;
+ 0BBE           ;   float f;
+ 0BBE           ;  
+ 0BBE           ;       for(l=0;l<1000;l++)
+ 0BBE 80E0              ldi R24,0
+ 0BC0 8883              std y+0,R24
+ 0BC2 8983              std y+1,R24
+ 0BC4 8A83              std y+2,R24
+ 0BC6 8B83              std y+3,R24
+ 0BC8 1BC0              xjmp L270
+ 0BCA           L267:
+ 0BCA                   .dbline 505
+ 0BCA           ;       {
+ 0BCA                   .dbline 506
+ 0BCA           ;               for(j=0;j<1000;j++);
+ 0BCA CC24              clr R12
+ 0BCC DD24              clr R13
+ 0BCE 03C0              xjmp L274
+ 0BD0           L271:
+ 0BD0                   .dbline 506
+ 0BD0           L272:
+ 0BD0                   .dbline 506
+ 0BD0 C601              movw R24,R12
+ 0BD2 0196              adiw R24,1
+ 0BD4 6C01              movw R12,R24
+ 0BD6           L274:
+ 0BD6                   .dbline 506
+ 0BD6 C601              movw R24,R12
+ 0BD8 883E              cpi R24,232
+ 0BDA E3E0              ldi R30,3
+ 0BDC 9E07              cpc R25,R30
+ 0BDE C0F3              brlo L271
+ 0BE0           X87:
+ 0BE0                   .dbline 507
+ 0BE0           ;       }
+ 0BE0           L268:
+ 0BE0                   .dbline 504
+ 0BE0 41E0              ldi R20,1
+ 0BE2 50E0              ldi R21,0
+ 0BE4 60E0              ldi R22,0
+ 0BE6 70E0              ldi R23,0
+ 0BE8 2880              ldd R2,y+0
+ 0BEA 3980              ldd R3,y+1
+ 0BEC 4A80              ldd R4,y+2
+ 0BEE 5B80              ldd R5,y+3
+ 0BF0 240E              add R2,R20
+ 0BF2 351E              adc R3,R21
+ 0BF4 461E              adc R4,R22
+ 0BF6 571E              adc R5,R23
+ 0BF8 2882              std y+0,R2
+ 0BFA 3982              std y+1,R3
+ 0BFC 4A82              std y+2,R4
+ 0BFE 5B82              std y+3,R5
+ 0C00           L270:
+ 0C00                   .dbline 504
+ 0C00 48EE              ldi R20,232
+ 0C02 53E0              ldi R21,3
+ 0C04 60E0              ldi R22,0
+ 0C06 70E0              ldi R23,0
+ 0C08 2880              ldd R2,y+0
+ 0C0A 3980              ldd R3,y+1
+ 0C0C 4A80              ldd R4,y+2
+ 0C0E 5B80              ldd R5,y+3
+ 0C10 2416              cp R2,R20
+ 0C12 3506              cpc R3,R21
+ 0C14 4606              cpc R4,R22
+ 0C16 5706              cpc R5,R23
+ 0C18 C0F2              brlo L267
+ 0C1A           X88:
+ 0C1A                   .dbline 509
+ 0C1A           ; 
+ 0C1A           ;       Start();
+ 0C1A 11DF              xcall _Start
+ 0C1C                   .dbline 511
+ 0C1C           ; 
+ 0C1C           ;       CheckMotor(50); 
+ 0C1C 02E3              ldi R16,50
+ 0C1E 10E0              ldi R17,0
+ 0C20 AFDD              xcall _CheckMotor
+ 0C22                   .dbline 513
+ 0C22           ; 
+ 0C22           ;       Motor1Gear=EEPROM_read(0);
+ 0C22 0027              clr R16
+ 0C24 1127              clr R17
+ 0C26 B7D3              xcall _EEPROM_read
+ 0C28 00930800          sts _Motor1Gear,R16
+ 0C2C                   .dbline 514
+ 0C2C           ;       Motor2Gear=EEPROM_read(1);
+ 0C2C 01E0              ldi R16,1
+ 0C2E 10E0              ldi R17,0
+ 0C30 B2D3              xcall _EEPROM_read
+ 0C32 00930700          sts _Motor2Gear,R16
+ 0C36                   .dbline 515
+ 0C36           ;       MotorIdelCur=EEPROM_read(2);
+ 0C36 02E0              ldi R16,2
+ 0C38 10E0              ldi R17,0
+ 0C3A ADD3              xcall _EEPROM_read
+ 0C3C A02E              mov R10,R16
+ 0C3E A0920300          sts _MotorIdelCur,R10
+ 0C42                   .dbline 516
+ 0C42           ;       Gear2Thr();//档位转换为阈值
+ 0C42 77DF              xcall _Gear2Thr
+ 0C44 4FC3              xjmp L276
+ 0C46           L275:
+ 0C46                   .dbline 520
+ 0C46           ;   
+ 0C46           ; 
+ 0C46           ;       while(1)
+ 0C46           ;       { 
+ 0C46                   .dbline 521
+ 0C46           ;               CheckMotor(0);//实时进行电机过流检测
+ 0C46 0027              clr R16
+ 0C48 1127              clr R17
+ 0C4A 9ADD              xcall _CheckMotor
+ 0C4C                   .dbline 523
+ 0C4C           ; 
+ 0C4C           ;               if(IntFlag==1)//接收到了正常命令帧
+ 0C4C 80910100          lds R24,_IntFlag
+ 0C50 8130              cpi R24,1
+ 0C52 09F0              breq X138
+ 0C54 47C3              xjmp L278
+ 0C56           X138:
+ 0C56           X89:
+ 0C56                   .dbline 524
+ 0C56           ;               {
+ 0C56                   .dbline 525
+ 0C56           ;                               switch(R_dat&0xf0)
+ 0C56 80910200          lds R24,_R_dat
+ 0C5A 9927              clr R25
+ 0C5C 807F              andi R24,240
+ 0C5E 9070              andi R25,0
+ 0C60 5C01              movw R10,R24
+ 0C62 8037              cpi R24,112
+ 0C64 E0E0              ldi R30,0
+ 0C66 9E07              cpc R25,R30
+ 0C68 09F4              brne X139
+ 0C6A 43C1              xjmp L313
+ 0C6C           X139:
+ 0C6C           X90:
+ 0C6C 80E7              ldi R24,112
+ 0C6E 90E0              ldi R25,0
+ 0C70 8A15              cp R24,R10
+ 0C72 9B05              cpc R25,R11
+ 0C74 8CF0              brlt L357
+ 0C76           X91:
+ 0C76           L356:
+ 0C76 C501              movw R24,R10
+ 0C78 8033              cpi R24,48
+ 0C7A E0E0              ldi R30,0
+ 0C7C 9E07              cpc R25,R30
+ 0C7E 39F1              breq L284
+ 0C80           X92:
+ 0C80 8033              cpi R24,48
+ 0C82 E0E0              ldi R30,0
+ 0C84 9E07              cpc R25,R30
+ 0C86 0CF4              brge X140
+ 0C88 2AC3              xjmp L281
+ 0C8A           X140:
+ 0C8A           X93:
+ 0C8A           L358:
+ 0C8A C501              movw R24,R10
+ 0C8C 8036              cpi R24,96
+ 0C8E E0E0              ldi R30,0
+ 0C90 9E07              cpc R25,R30
+ 0C92 09F4              brne X141
+ 0C94 54C0              xjmp L289
+ 0C96           X141:
+ 0C96           X94:
+ 0C96 23C3              xjmp L281
+ 0C98           L357:
+ 0C98 C501              movw R24,R10
+ 0C9A 8039              cpi R24,144
+ 0C9C E0E0              ldi R30,0
+ 0C9E 9E07              cpc R25,R30
+ 0CA0 09F4              brne X142
+ 0CA2 0CC3              xjmp L353
+ 0CA4           X142:
+ 0CA4           X95:
+ 0CA4 80E9              ldi R24,144
+ 0CA6 90E0              ldi R25,0
+ 0CA8 8A15              cp R24,R10
+ 0CAA 9B05              cpc R25,R11
+ 0CAC 3CF0              brlt L360
+ 0CAE           X96:
+ 0CAE           L359:
+ 0CAE C501              movw R24,R10
+ 0CB0 8038              cpi R24,128
+ 0CB2 E0E0              ldi R30,0
+ 0CB4 9E07              cpc R25,R30
+ 0CB6 09F4              brne X143
+ 0CB8 2EC2              xjmp L336
+ 0CBA           X143:
+ 0CBA           X97:
+ 0CBA 11C3              xjmp L281
+ 0CBC           L360:
+ 0CBC C501              movw R24,R10
+ 0CBE 803D              cpi R24,208
+ 0CC0 E0E0              ldi R30,0
+ 0CC2 9E07              cpc R25,R30
+ 0CC4 09F0              breq L283
+ 0CC6           X98:
+ 0CC6 0BC3              xjmp L281
+ 0CC8           L283:
+ 0CC8                   .dbline 528
+ 0CC8           ;                               {               
+ 0CC8           ;                                   case 0xd0://读版本号
+ 0CC8           ;                                          SendUart1(BB);  
+ 0CC8 00E1              ldi R16,16
+ 0CCA C9D9              xcall _SendUart1
+ 0CCC                   .dbline 529
+ 0CCC           ;                                       break;          
+ 0CCC 08C3              xjmp L281
+ 0CCE           L284:
+ 0CCE                   .dbline 532
+ 0CCE           ;                                        
+ 0CCE           ;                                       case 0x30:// 采样电机电压,R7取30k时，最大能测得约88V
+ 0CCE           ;                                               f=SampleADC(2);
+ 0CCE 02E0              ldi R16,2
+ 0CD0 E8DC              xcall _SampleADC
+ 0CD2 1127              clr R17
+ 0CD4 0E940000          xcall int2fp
+ 0CD8 0C83              std y+4,R16
+ 0CDA 1D83              std y+5,R17
+ 0CDC 2E83              std y+6,R18
+ 0CDE 3F83              std y+7,R19
+ 0CE0                   .dbline 533
+ 0CE0           ;                                               f=f*0.34333;//按内部参考2.56V，8位AD采样，分压电阻分别是1M和30K来计算                                   
+ 0CE0 00E0              ldi R16,<L285
+ 0CE2 10E0              ldi R17,>L285
+ 0CE4 0E940000          xcall elpm32
+ 0CE8 CE01              movw R24,R28
+ 0CEA 0496              adiw R24,4
+ 0CEC 9A93              st -y,R25
+ 0CEE 8A93              st -y,R24
+ 0CF0 0E940000          xcall fpmule1
+ 0CF4 0C83              std y+4,R16
+ 0CF6 1D83              std y+5,R17
+ 0CF8 2E83              std y+6,R18
+ 0CFA 3F83              std y+7,R19
+ 0CFC                   .dbline 534
+ 0CFC           ;                                               i=f;
+ 0CFC 0C81              ldd R16,y+4
+ 0CFE 1D81              ldd R17,y+5
+ 0D00 2E81              ldd R18,y+6
+ 0D02 3F81              ldd R19,y+7
+ 0D04 0E940000          xcall fpint
+ 0D08 A02E              mov R10,R16
+ 0D0A                   .dbline 535
+ 0D0A           ;                                                if( (Motor1Status.s.RUN==1) || (Motor2Status.s.RUN==1) )
+ 0D0A 80910B00          lds R24,_Motor1Status
+ 0D0E 90910C00          lds R25,_Motor1Status+1
+ 0D12 8170              andi R24,1
+ 0D14 9070              andi R25,0
+ 0D16 8130              cpi R24,1
+ 0D18 E0E0              ldi R30,0
+ 0D1A 9E07              cpc R25,R30
+ 0D1C 51F0              breq L288
+ 0D1E           X99:
+ 0D1E 80910900          lds R24,_Motor2Status
+ 0D22 90910A00          lds R25,_Motor2Status+1
+ 0D26 8170              andi R24,1
+ 0D28 9070              andi R25,0
+ 0D2A 8130              cpi R24,1
+ 0D2C E0E0              ldi R30,0
+ 0D2E 9E07              cpc R25,R30
+ 0D30 19F4              brne L286
+ 0D32           X100:
+ 0D32           L288:
+ 0D32                   .dbline 536
+ 0D32           ;                                                {
+ 0D32                   .dbline 537
+ 0D32           ;                                                 i+=5;//为了用户看起来好看些
+ 0D32 8A2D              mov R24,R10
+ 0D34 8B5F              subi R24,251    ; addi 5
+ 0D36 A82E              mov R10,R24
+ 0D38                   .dbline 538
+ 0D38           ;                                                }
+ 0D38           L286:
+ 0D38                   .dbline 539
+ 0D38           ;                                               SendUart1(i);   
+ 0D38 0A2D              mov R16,R10
+ 0D3A 91D9              xcall _SendUart1
+ 0D3C                   .dbline 540
+ 0D3C           ;                                               break;
+ 0D3C D0C2              xjmp L281
+ 0D3E           L289:
+ 0D3E                   .dbline 543
+ 0D3E           ; 
+ 0D3E           ;                                       case 0x60:  //收放电机 
+ 0D3E           ;                                               if( !(((R_dat)==0x61)  || ((R_dat)==0x62) ) )//既不是正转，也不是反转，则立即返回且不响应上位机
+ 0D3E E0900200          lds R14,_R_dat
+ 0D42 8E2D              mov R24,R14
+ 0D44 8136              cpi R24,97
+ 0D46 19F0              breq L290
+ 0D48           X101:
+ 0D48 8236              cpi R24,98
+ 0D4A 09F0              breq L290
+ 0D4C           X102:
+ 0D4C                   .dbline 544
+ 0D4C           ;                                                       break;
+ 0D4C C8C2              xjmp L281
+ 0D4E           L290:
+ 0D4E                   .dbline 546
+ 0D4E           ; 
+ 0D4E           ;                                               if( Motor2Status.s.RUN==1 )//调节电机正在运行
+ 0D4E 80910900          lds R24,_Motor2Status
+ 0D52 90910A00          lds R25,_Motor2Status+1
+ 0D56 8170              andi R24,1
+ 0D58 9070              andi R25,0
+ 0D5A 8130              cpi R24,1
+ 0D5C E0E0              ldi R30,0
+ 0D5E 9E07              cpc R25,R30
+ 0D60 51F4              brne L292
+ 0D62           X103:
+ 0D62                   .dbline 547
+ 0D62           ;                                               {
+ 0D62                   .dbline 548
+ 0D62           ;                                                       Motor1Status.s.StartResult=3;//另一电机正在运行
+ 0D62 80910B00          lds R24,_Motor1Status
+ 0D66 90910C00          lds R25,_Motor1Status+1
+ 0D6A 806C              ori R24,192
+ 0D6C 90930C00          sts _Motor1Status+1,R25
+ 0D70 80930B00          sts _Motor1Status,R24
+ 0D74                   .dbline 549
+ 0D74           ;                                               }
+ 0D74 AEC0              xjmp L293
+ 0D76           L292:
+ 0D76                   .dbline 550
+ 0D76           ;                                               else if((Motor1Status.s.RUN==1)&&(Motor1Status.s.DIR==1))//收放电机正在正转
+ 0D76 E0900B00          lds R14,_Motor1Status
+ 0D7A F0900C00          lds R15,_Motor1Status+1
+ 0D7E C701              movw R24,R14
+ 0D80 8170              andi R24,1
+ 0D82 9070              andi R25,0
+ 0D84 8130              cpi R24,1
+ 0D86 E0E0              ldi R30,0
+ 0D88 9E07              cpc R25,R30
+ 0D8A 29F5              brne L294
+ 0D8C           X104:
+ 0D8C C701              movw R24,R14
+ 0D8E 9695              lsr R25
+ 0D90 8795              ror R24
+ 0D92 8170              andi R24,1
+ 0D94 9070              andi R25,0
+ 0D96 8130              cpi R24,1
+ 0D98 E0E0              ldi R30,0
+ 0D9A 9E07              cpc R25,R30
+ 0D9C E1F4              brne L294
+ 0D9E           X105:
+ 0D9E                   .dbline 551
+ 0D9E           ;                                               {
+ 0D9E                   .dbline 552
+ 0D9E           ;                                                 if(R_dat==0x61)
+ 0D9E 80910200          lds R24,_R_dat
+ 0DA2 8136              cpi R24,97
+ 0DA4 41F4              brne L296
+ 0DA6           X106:
+ 0DA6                   .dbline 553
+ 0DA6           ;                                                 {
+ 0DA6                   .dbline 554
+ 0DA6           ;                                                   Motor1Status.s.StartResult=1;//本电机正在同向运行
+ 0DA6 C701              movw R24,R14
+ 0DA8 8F73              andi R24,63
+ 0DAA 8064              ori R24,64
+ 0DAC 90930C00          sts _Motor1Status+1,R25
+ 0DB0 80930B00          sts _Motor1Status,R24
+ 0DB4                   .dbline 555
+ 0DB4           ;                                                 }
+ 0DB4 8EC0              xjmp L295
+ 0DB6           L296:
+ 0DB6                   .dbline 556
+ 0DB6           ;                                                 else if(R_dat==0x62)
+ 0DB6 80910200          lds R24,_R_dat
+ 0DBA 8236              cpi R24,98
+ 0DBC 09F0              breq X144
+ 0DBE 89C0              xjmp L295
+ 0DC0           X144:
+ 0DC0           X107:
+ 0DC0                   .dbline 557
+ 0DC0           ;                                                 {
+ 0DC0                   .dbline 558
+ 0DC0           ;                                                  Motor1Status.s.StartResult=2;//本电机正在反向运行
+ 0DC0 80910B00          lds R24,_Motor1Status
+ 0DC4 90910C00          lds R25,_Motor1Status+1
+ 0DC8 8F73              andi R24,63
+ 0DCA 8068              ori R24,128
+ 0DCC 90930C00          sts _Motor1Status+1,R25
+ 0DD0 80930B00          sts _Motor1Status,R24
+ 0DD4                   .dbline 559
+ 0DD4           ;                                                 }
+ 0DD4                   .dbline 561
+ 0DD4           ; 
+ 0DD4           ;                                               }
+ 0DD4 7EC0              xjmp L295
+ 0DD6           L294:
+ 0DD6                   .dbline 562
+ 0DD6           ;                                               else if((Motor1Status.s.RUN==1)&&(Motor1Status.s.DIR==0))//收放电机正在反转
+ 0DD6 E0900B00          lds R14,_Motor1Status
+ 0DDA F0900C00          lds R15,_Motor1Status+1
+ 0DDE C701              movw R24,R14
+ 0DE0 8170              andi R24,1
+ 0DE2 9070              andi R25,0
+ 0DE4 8130              cpi R24,1
+ 0DE6 E0E0              ldi R30,0
+ 0DE8 9E07              cpc R25,R30
+ 0DEA F1F4              brne L300
+ 0DEC           X108:
+ 0DEC E1FC              sbrc R14,1
+ 0DEE 1CC0              rjmp L300
+ 0DF0           X109:
+ 0DF0                   .dbline 563
+ 0DF0           ;                                               {
+ 0DF0                   .dbline 564
+ 0DF0           ;                                                 if(R_dat==0x61)
+ 0DF0 80910200          lds R24,_R_dat
+ 0DF4 8136              cpi R24,97
+ 0DF6 41F4              brne L302
+ 0DF8           X110:
+ 0DF8                   .dbline 565
+ 0DF8           ;                                                 {
+ 0DF8                   .dbline 566
+ 0DF8           ;                                                  Motor1Status.s.StartResult=2;//本电机正在反向运行 
+ 0DF8 C701              movw R24,R14
+ 0DFA 8F73              andi R24,63
+ 0DFC 8068              ori R24,128
+ 0DFE 90930C00          sts _Motor1Status+1,R25
+ 0E02 80930B00          sts _Motor1Status,R24
+ 0E06                   .dbline 567
+ 0E06           ;                                                 }
+ 0E06 65C0              xjmp L301
+ 0E08           L302:
+ 0E08                   .dbline 568
+ 0E08           ;                                                 else if(R_dat==0x62)
+ 0E08 80910200          lds R24,_R_dat
+ 0E0C 8236              cpi R24,98
+ 0E0E 09F0              breq X145
+ 0E10 60C0              xjmp L301
+ 0E12           X145:
+ 0E12           X111:
+ 0E12                   .dbline 569
+ 0E12           ;                                                 {
+ 0E12                   .dbline 570
+ 0E12           ;                                                  Motor1Status.s.StartResult=1;//本电机正在同向运行
+ 0E12 80910B00          lds R24,_Motor1Status
+ 0E16 90910C00          lds R25,_Motor1Status+1
+ 0E1A 8F73              andi R24,63
+ 0E1C 8064              ori R24,64
+ 0E1E 90930C00          sts _Motor1Status+1,R25
+ 0E22 80930B00          sts _Motor1Status,R24
+ 0E26                   .dbline 571
+ 0E26           ;                                                 }
+ 0E26                   .dbline 572
+ 0E26           ;                                               }
+ 0E26 55C0              xjmp L301
+ 0E28           L300:
+ 0E28                   .dbline 574
+ 0E28           ;                                               else //二个电机都是停止状态，按命令要求启动电机，约1.5秒后反馈上位机
+ 0E28           ;                                               {  
+ 0E28                   .dbline 576
+ 0E28           ;                                                       //全部电机状态置初值，上一次停止原因全部清除
+ 0E28           ;                                                       Motor1Status.s.BrokenStop=0;
+ 0E28 80910B00          lds R24,_Motor1Status
+ 0E2C 90910C00          lds R25,_Motor1Status+1
+ 0E30 8B7F              andi R24,251
+ 0E32 90930C00          sts _Motor1Status+1,R25
+ 0E36 80930B00          sts _Motor1Status,R24
+ 0E3A                   .dbline 577
+ 0E3A           ;                                                       Motor1Status.s.CommandStop=0;
+ 0E3A 877F              andi R24,247
+ 0E3C 90930C00          sts _Motor1Status+1,R25
+ 0E40 80930B00          sts _Motor1Status,R24
+ 0E44                   .dbline 578
+ 0E44           ;                                                       Motor1Status.s.OverCurrent=0;
+ 0E44 8F7E              andi R24,239
+ 0E46 90930C00          sts _Motor1Status+1,R25
+ 0E4A 80930B00          sts _Motor1Status,R24
+ 0E4E                   .dbline 579
+ 0E4E           ;                                                       Motor1Status.s.UnderVoltage=0;
+ 0E4E 8F7D              andi R24,223
+ 0E50 90930C00          sts _Motor1Status+1,R25
+ 0E54 80930B00          sts _Motor1Status,R24
+ 0E58                   .dbline 580
+ 0E58           ;                                                       Motor1Status.s.StartResult=0;//正常启动
+ 0E58 8F73              andi R24,63
+ 0E5A 90930C00          sts _Motor1Status+1,R25
+ 0E5E 80930B00          sts _Motor1Status,R24
+ 0E62                   .dbline 582
+ 0E62           ; 
+ 0E62           ;                                                       if((R_dat)==0x61)//张开命令
+ 0E62 80910200          lds R24,_R_dat
+ 0E66 8136              cpi R24,97
+ 0E68 51F4              brne L306
+ 0E6A           X112:
+ 0E6A                   .dbline 583
+ 0E6A           ;                                                       { 
+ 0E6A                   .dbline 585
+ 0E6A           ;                                                                 //张臂，正转
+ 0E6A           ;                                                               Motor1Status.s.DIR=1;
+ 0E6A 80910B00          lds R24,_Motor1Status
+ 0E6E 90910C00          lds R25,_Motor1Status+1
+ 0E72 8260              ori R24,2
+ 0E74 90930C00          sts _Motor1Status+1,R25
+ 0E78 80930B00          sts _Motor1Status,R24
+ 0E7C                   .dbline 586
+ 0E7C           ;                                                       }
+ 0E7C 0EC0              xjmp L307
+ 0E7E           L306:
+ 0E7E                   .dbline 587
+ 0E7E           ;                                                       else if((R_dat)==0x62)          
+ 0E7E 80910200          lds R24,_R_dat
+ 0E82 8236              cpi R24,98
+ 0E84 09F0              breq X146
+ 0E86 2FC2              xjmp L266
+ 0E88           X146:
+ 0E88           X113:
+ 0E88                   .dbline 588
+ 0E88           ;                                                       { 
+ 0E88                   .dbline 590
+ 0E88           ;                                                                //收臂，反转
+ 0E88           ;                                                               Motor1Status.s.DIR=0;
+ 0E88 80910B00          lds R24,_Motor1Status
+ 0E8C 90910C00          lds R25,_Motor1Status+1
+ 0E90 8D7F              andi R24,253
+ 0E92 90930C00          sts _Motor1Status+1,R25
+ 0E96 80930B00          sts _Motor1Status,R24
+ 0E9A                   .dbline 591
+ 0E9A           ;                                                       }
+ 0E9A                   .dbline 593
+ 0E9A           ;                                                       else
+ 0E9A           ;                                                       {
+ 0E9A                   .dbline 594
+ 0E9A           ;                                                               return;//20170609
+ 0E9A           L309:
+ 0E9A           L307:
+ 0E9A                   .dbline 597
+ 0E9A           ;                                                       }
+ 0E9A           ; 
+ 0E9A           ;                                                       VM_Open();//开电机电源
+ 0E9A DE9A              sbi 0x1b,6
+ 0E9C                   .dbline 599
+ 0E9C           ; 
+ 0E9C           ;                                                       CheckMotor(500);//开电机电源后需等待半秒让大功率二极管电压稳定
+ 0E9C 04EF              ldi R16,500
+ 0E9E 11E0              ldi R17,1
+ 0EA0 6FDC              xcall _CheckMotor
+ 0EA2                   .dbline 602
+ 0EA2           ; 
+ 0EA2           ; 
+ 0EA2           ;                                                       TCCR1B = 0x00; //stop
+ 0EA2 2224              clr R2
+ 0EA4 2EBC              out 0x2e,R2
+ 0EA6                   .dbline 603
+ 0EA6           ;                                                       TCNT1 = 61629;   //定时500ms
+ 0EA6 8DEB              ldi R24,61629
+ 0EA8 90EF              ldi R25,240
+ 0EAA 9DBD              out 0x2d,R25
+ 0EAC 8CBD              out 0x2c,R24
+ 0EAE                   .dbline 604
+ 0EAE           ;                                                       TIFR|=0x04; //清定时器1中断标志
+ 0EAE 86B7              in R24,0x36
+ 0EB0 8460              ori R24,4
+ 0EB2 86BF              out 0x36,R24
+ 0EB4                   .dbline 605
+ 0EB4           ;                                                       TCCR1B = 0x05; //1024分频
+ 0EB4 85E0              ldi R24,5
+ 0EB6 8EBD              out 0x2e,R24
+ 0EB8                   .dbline 606
+ 0EB8           ;                                                       TIFR|=0x04; //清定时器1中断标志
+ 0EB8 86B7              in R24,0x36
+ 0EBA 8460              ori R24,4
+ 0EBC 86BF              out 0x36,R24
+ 0EBE                   .dbline 607
+ 0EBE           ;                                                       Pwm_startup(1);//PWM启动,电机启动前期500ms内不进行电流检查，但有欠压监测                
+ 0EBE 01E0              ldi R16,1
+ 0EC0 2AD9              xcall _Pwm_startup
+ 0EC2           L310:
+ 0EC2                   .dbline 608
+ 0EC2           ;                                                       while((TIFR&0x04)==0x00); //等待500ms定时到，期间可能有欠压中断发生
+ 0EC2           L311:
+ 0EC2                   .dbline 608
+ 0EC2 26B6              in R2,0x36
+ 0EC4 22FE              sbrs R2,2
+ 0EC6 FDCF              rjmp L310
+ 0EC8           X114:
+ 0EC8                   .dbline 609
+ 0EC8           ;                                                       TCCR1B = 0x00; //stop
+ 0EC8 2224              clr R2
+ 0ECA 2EBC              out 0x2e,R2
+ 0ECC                   .dbline 611
+ 0ECC           ; 
+ 0ECC           ;                                                       CheckMotor(500);//延时保证总线电压稳定          
+ 0ECC 04EF              ldi R16,500
+ 0ECE 11E0              ldi R17,1
+ 0ED0 57DC              xcall _CheckMotor
+ 0ED2                   .dbline 612
+ 0ED2           ;                                               }
+ 0ED2           L301:
+ 0ED2           L295:
+ 0ED2           L293:
+ 0ED2                   .dbline 615
+ 0ED2           ;                        
+ 0ED2           ;                                   //返回2字节电机状态
+ 0ED2           ;                                               SendUart1(Motor1Status.i); CheckMotor(2);
+ 0ED2 00910B00          lds R16,_Motor1Status
+ 0ED6 10910C00          lds R17,_Motor1Status+1
+ 0EDA C1D8              xcall _SendUart1
+ 0EDC                   .dbline 615
+ 0EDC 02E0              ldi R16,2
+ 0EDE 10E0              ldi R17,0
+ 0EE0 4FDC              xcall _CheckMotor
+ 0EE2                   .dbline 616
+ 0EE2           ;                                               SendUart1(Motor1Status.i>>8);
+ 0EE2 00910B00          lds R16,_Motor1Status
+ 0EE6 10910C00          lds R17,_Motor1Status+1
+ 0EEA 012F              mov R16,R17
+ 0EEC 1127              clr R17
+ 0EEE B7D8              xcall _SendUart1
+ 0EF0                   .dbline 618
+ 0EF0           ; 
+ 0EF0           ;                                               break;
+ 0EF0 F6C1              xjmp L281
+ 0EF2           L313:
+ 0EF2                   .dbline 621
+ 0EF2           ; 
+ 0EF2           ;                                       case 0x70://调节电机   
+ 0EF2           ;                                               if( ((R_dat)<0x71)  || ((R_dat)>0x7c)  )//既不是调大，也不是调小，也不微调大，也不是微调小，则立即返回且不响应上位机
+ 0EF2 E0900200          lds R14,_R_dat
+ 0EF6 8E2D              mov R24,R14
+ 0EF8 8137              cpi R24,113
+ 0EFA 18F0              brlo L316
+ 0EFC           X115:
+ 0EFC 8CE7              ldi R24,124
+ 0EFE 8E15              cp R24,R14
+ 0F00 08F4              brsh L314
+ 0F02           X116:
+ 0F02           L316:
+ 0F02                   .dbline 622
+ 0F02           ;                                               break;
+ 0F02 EDC1              xjmp L281
+ 0F04           L314:
+ 0F04                   .dbline 624
+ 0F04           ; 
+ 0F04           ;                                               i=R_dat%2;
+ 0F04 12E0              ldi R17,2
+ 0F06 00910200          lds R16,_R_dat
+ 0F0A 0E940000          xcall mod8u
+ 0F0E A02E              mov R10,R16
+ 0F10                   .dbline 626
+ 0F10           ;                                               
+ 0F10           ;                                               if(Motor1Status.s.RUN==1)//收放电机正在运行
+ 0F10 80910B00          lds R24,_Motor1Status
+ 0F14 90910C00          lds R25,_Motor1Status+1
+ 0F18 8170              andi R24,1
+ 0F1A 9070              andi R25,0
+ 0F1C 8130              cpi R24,1
+ 0F1E E0E0              ldi R30,0
+ 0F20 9E07              cpc R25,R30
+ 0F22 51F4              brne L317
+ 0F24           X117:
+ 0F24                   .dbline 627
+ 0F24           ;                                               {
+ 0F24                   .dbline 628
+ 0F24           ;                                                       Motor2Status.s.StartResult=3;//另一电机正在运行
+ 0F24 80910900          lds R24,_Motor2Status
+ 0F28 90910A00          lds R25,_Motor2Status+1
+ 0F2C 806C              ori R24,192
+ 0F2E 90930A00          sts _Motor2Status+1,R25
+ 0F32 80930900          sts _Motor2Status,R24
+ 0F36                   .dbline 629
+ 0F36           ;                                               }
+ 0F36 9DC0              xjmp L318
+ 0F38           L317:
+ 0F38                   .dbline 630
+ 0F38           ;                                               else if((Motor2Status.s.RUN==1)&&(Motor2Status.s.DIR==1))//调节电机正在正转
+ 0F38 E0900900          lds R14,_Motor2Status
+ 0F3C F0900A00          lds R15,_Motor2Status+1
+ 0F40 C701              movw R24,R14
+ 0F42 8170              andi R24,1
+ 0F44 9070              andi R25,0
+ 0F46 8130              cpi R24,1
+ 0F48 E0E0              ldi R30,0
+ 0F4A 9E07              cpc R25,R30
+ 0F4C F1F4              brne L319
+ 0F4E           X118:
+ 0F4E C701              movw R24,R14
+ 0F50 9695              lsr R25
+ 0F52 8795              ror R24
+ 0F54 8170              andi R24,1
+ 0F56 9070              andi R25,0
+ 0F58 8130              cpi R24,1
+ 0F5A E0E0              ldi R30,0
+ 0F5C 9E07              cpc R25,R30
+ 0F5E A9F4              brne L319
+ 0F60           X119:
+ 0F60                   .dbline 631
+ 0F60           ;                                               {
+ 0F60                   .dbline 632
+ 0F60           ;                                                 if(i==0)//偶数命令，正转
+ 0F60 AA20              tst R10
+ 0F62 41F4              brne L321
+ 0F64           X120:
+ 0F64                   .dbline 633
+ 0F64           ;                                                 {
+ 0F64                   .dbline 634
+ 0F64           ;                                                  Motor2Status.s.StartResult=1;//本电机正在同向运行
+ 0F64 C701              movw R24,R14
+ 0F66 8F73              andi R24,63
+ 0F68 8064              ori R24,64
+ 0F6A 90930A00          sts _Motor2Status+1,R25
+ 0F6E 80930900          sts _Motor2Status,R24
+ 0F72                   .dbline 635
+ 0F72           ;                                                 }
+ 0F72 7FC0              xjmp L320
+ 0F74           L321:
+ 0F74                   .dbline 637
+ 0F74           ;                                                 else//奇数命令，反转
+ 0F74           ;                                                 {
+ 0F74                   .dbline 638
+ 0F74           ;                                                  Motor2Status.s.StartResult=2;//本电机正在反向运行
+ 0F74 80910900          lds R24,_Motor2Status
+ 0F78 90910A00          lds R25,_Motor2Status+1
+ 0F7C 8F73              andi R24,63
+ 0F7E 8068              ori R24,128
+ 0F80 90930A00          sts _Motor2Status+1,R25
+ 0F84 80930900          sts _Motor2Status,R24
+ 0F88                   .dbline 639
+ 0F88           ;                                                 }
+ 0F88                   .dbline 640
+ 0F88           ;                                               }
+ 0F88 74C0              xjmp L320
+ 0F8A           L319:
+ 0F8A                   .dbline 641
+ 0F8A           ;                                               else if((Motor2Status.s.RUN==1)&&(Motor2Status.s.DIR==0))//调节电机正在反转
+ 0F8A E0900900          lds R14,_Motor2Status
+ 0F8E F0900A00          lds R15,_Motor2Status+1
+ 0F92 C701              movw R24,R14
+ 0F94 8170              andi R24,1
+ 0F96 9070              andi R25,0
+ 0F98 8130              cpi R24,1
+ 0F9A E0E0              ldi R30,0
+ 0F9C 9E07              cpc R25,R30
+ 0F9E B9F4              brne L323
+ 0FA0           X121:
+ 0FA0 E1FC              sbrc R14,1
+ 0FA2 15C0              rjmp L323
+ 0FA4           X122:
+ 0FA4                   .dbline 642
+ 0FA4           ;                                               {
+ 0FA4                   .dbline 643
+ 0FA4           ;                                                 if(i==0)//偶数命令，正转
+ 0FA4 AA20              tst R10
+ 0FA6 41F4              brne L325
+ 0FA8           X123:
+ 0FA8                   .dbline 644
+ 0FA8           ;                                                 {
+ 0FA8                   .dbline 645
+ 0FA8           ;                                                  Motor2Status.s.StartResult=2;//本电机正在反向运行
+ 0FA8 C701              movw R24,R14
+ 0FAA 8F73              andi R24,63
+ 0FAC 8068              ori R24,128
+ 0FAE 90930A00          sts _Motor2Status+1,R25
+ 0FB2 80930900          sts _Motor2Status,R24
+ 0FB6                   .dbline 646
+ 0FB6           ;                                                 }
+ 0FB6 5DC0              xjmp L324
+ 0FB8           L325:
+ 0FB8                   .dbline 648
+ 0FB8           ;                                                 else//奇数命令，反转
+ 0FB8           ;                                                 {
+ 0FB8                   .dbline 649
+ 0FB8           ;                                                  Motor2Status.s.StartResult=1;//本电机正在同向运行
+ 0FB8 80910900          lds R24,_Motor2Status
+ 0FBC 90910A00          lds R25,_Motor2Status+1
+ 0FC0 8F73              andi R24,63
+ 0FC2 8064              ori R24,64
+ 0FC4 90930A00          sts _Motor2Status+1,R25
+ 0FC8 80930900          sts _Motor2Status,R24
+ 0FCC                   .dbline 650
+ 0FCC           ;                                                 }
+ 0FCC                   .dbline 651
+ 0FCC           ;                                               }                                       
+ 0FCC 52C0              xjmp L324
+ 0FCE           L323:
+ 0FCE                   .dbline 653
+ 0FCE           ;                                               else //二个电机都是停止状态，按命令要求启动电机，约1.5秒后反馈上位机
+ 0FCE           ;                                               {  
+ 0FCE                   .dbline 655
+ 0FCE           ;                                                       //全部电机状态置初值，上一次停止原因全部清除
+ 0FCE           ;                                                       Motor2Status.s.BrokenStop=0;
+ 0FCE 80910900          lds R24,_Motor2Status
+ 0FD2 90910A00          lds R25,_Motor2Status+1
+ 0FD6 8B7F              andi R24,251
+ 0FD8 90930A00          sts _Motor2Status+1,R25
+ 0FDC 80930900          sts _Motor2Status,R24
+ 0FE0                   .dbline 656
+ 0FE0           ;                                                       Motor2Status.s.CommandStop=0;
+ 0FE0 877F              andi R24,247
+ 0FE2 90930A00          sts _Motor2Status+1,R25
+ 0FE6 80930900          sts _Motor2Status,R24
+ 0FEA                   .dbline 657
+ 0FEA           ;                                                       Motor2Status.s.OverCurrent=0;
+ 0FEA 8F7E              andi R24,239
+ 0FEC 90930A00          sts _Motor2Status+1,R25
+ 0FF0 80930900          sts _Motor2Status,R24
+ 0FF4                   .dbline 658
+ 0FF4           ;                                                       Motor2Status.s.UnderVoltage=0;
+ 0FF4 8F7D              andi R24,223
+ 0FF6 90930A00          sts _Motor2Status+1,R25
+ 0FFA 80930900          sts _Motor2Status,R24
+ 0FFE                   .dbline 659
+ 0FFE           ;                                                       Motor2Status.s.StartResult=0;//正常启动
+ 0FFE 8F73              andi R24,63
+ 1000 90930A00          sts _Motor2Status+1,R25
+ 1004 80930900          sts _Motor2Status,R24
+ 1008                   .dbline 661
+ 1008           ; 
+ 1008           ;                                                       if( i==1 )//奇数命令，调大
+ 1008 8A2D              mov R24,R10
+ 100A 8130              cpi R24,1
+ 100C 51F4              brne L327
+ 100E           X124:
+ 100E                   .dbline 662
+ 100E           ;                                                       { 
+ 100E                   .dbline 664
+ 100E           ;                                                               //反转
+ 100E           ;                                                               Motor2Status.s.DIR=0;
+ 100E 80910900          lds R24,_Motor2Status
+ 1012 90910A00          lds R25,_Motor2Status+1
+ 1016 8D7F              andi R24,253
+ 1018 90930A00          sts _Motor2Status+1,R25
+ 101C 80930900          sts _Motor2Status,R24
+ 1020                   .dbline 665
+ 1020           ;                                                       }
+ 1020 0CC0              xjmp L328
+ 1022           L327:
+ 1022                   .dbline 666
+ 1022           ;                                                       else if( i==0 )    //偶数命令，调小
+ 1022 AA20              tst R10
+ 1024 09F0              breq X147
+ 1026 5FC1              xjmp L266
+ 1028           X147:
+ 1028           X125:
+ 1028                   .dbline 667
+ 1028           ;                                                       { 
+ 1028                   .dbline 669
+ 1028           ;                                                               //正转
+ 1028           ;                                                               Motor2Status.s.DIR=1;
+ 1028 80910900          lds R24,_Motor2Status
+ 102C 90910A00          lds R25,_Motor2Status+1
+ 1030 8260              ori R24,2
+ 1032 90930A00          sts _Motor2Status+1,R25
+ 1036 80930900          sts _Motor2Status,R24
+ 103A                   .dbline 670
+ 103A           ;                                                       }
+ 103A                   .dbline 672
+ 103A           ;                                                       else
+ 103A           ;                                                       {
+ 103A                   .dbline 673
+ 103A           ;                                                               return;//20170609
+ 103A           L330:
+ 103A           L328:
+ 103A                   .dbline 676
+ 103A           ;                                                       }
+ 103A           ; 
+ 103A           ;                                                       VM_Open();//开电机电源
+ 103A DE9A              sbi 0x1b,6
+ 103C                   .dbline 678
+ 103C           ; 
+ 103C           ;                                                       CheckMotor(500);//开电机电源后需等待半秒让大功率二极管电压稳定
+ 103C 04EF              ldi R16,500
+ 103E 11E0              ldi R17,1
+ 1040 9FDB              xcall _CheckMotor
+ 1042                   .dbline 681
+ 1042           ; 
+ 1042           ; 
+ 1042           ;                                                       TCCR1B = 0x00; //stop
+ 1042 2224              clr R2
+ 1044 2EBC              out 0x2e,R2
+ 1046                   .dbline 682
+ 1046           ;                                                       TCNT1 = 61629;   //定时500ms
+ 1046 8DEB              ldi R24,61629
+ 1048 90EF              ldi R25,240
+ 104A 9DBD              out 0x2d,R25
+ 104C 8CBD              out 0x2c,R24
+ 104E                   .dbline 683
+ 104E           ;                                                       TIFR|=0x04; //清定时器1中断标志
+ 104E 86B7              in R24,0x36
+ 1050 8460              ori R24,4
+ 1052 86BF              out 0x36,R24
+ 1054                   .dbline 684
+ 1054           ;                                                       TCCR1B = 0x05; //1024分频
+ 1054 85E0              ldi R24,5
+ 1056 8EBD              out 0x2e,R24
+ 1058                   .dbline 685
+ 1058           ;                                                       TIFR|=0x04; //清定时器1中断标志
+ 1058 86B7              in R24,0x36
+ 105A 8460              ori R24,4
+ 105C 86BF              out 0x36,R24
+ 105E                   .dbline 686
+ 105E           ;                                                       Pwm_startup(2);//PWM启动，电机启动前期500ms内不进行电流检查，但有欠压监测                                       
+ 105E 02E0              ldi R16,2
+ 1060 5AD8              xcall _Pwm_startup
+ 1062           L331:
+ 1062                   .dbline 687
+ 1062           ;                                                       while((TIFR&0x04)==0x00); //等待500ms定时到，期间可能有欠压中断发生
+ 1062           L332:
+ 1062                   .dbline 687
+ 1062 26B6              in R2,0x36
+ 1064 22FE              sbrs R2,2
+ 1066 FDCF              rjmp L331
+ 1068           X126:
+ 1068                   .dbline 688
+ 1068           ;                                                       TCCR1B = 0x00; //stop
+ 1068 2224              clr R2
+ 106A 2EBC              out 0x2e,R2
+ 106C                   .dbline 690
+ 106C           ; 
+ 106C           ;                                                       CheckMotor(500);//延时保证总线电压稳定                   
+ 106C 04EF              ldi R16,500
+ 106E 11E0              ldi R17,1
+ 1070 87DB              xcall _CheckMotor
+ 1072                   .dbline 691
+ 1072           ;                                               }
+ 1072           L324:
+ 1072           L320:
+ 1072           L318:
+ 1072                   .dbline 694
+ 1072           ;                                               
+ 1072           ;                                               //返回2字节电机状态
+ 1072           ;                                               SendUart1(Motor2Status.i); CheckMotor(2);
+ 1072 00910900          lds R16,_Motor2Status
+ 1076 10910A00          lds R17,_Motor2Status+1
+ 107A 0E942F00          xcall _SendUart1
+ 107E                   .dbline 694
+ 107E 02E0              ldi R16,2
+ 1080 10E0              ldi R17,0
+ 1082 7EDB              xcall _CheckMotor
+ 1084                   .dbline 695
+ 1084           ;                                               SendUart1(Motor2Status.i>>8);
+ 1084 00910900          lds R16,_Motor2Status
+ 1088 10910A00          lds R17,_Motor2Status+1
+ 108C 012F              mov R16,R17
+ 108E 1127              clr R17
+ 1090 0E942F00          xcall _SendUart1
+ 1094                   .dbline 697
+ 1094           ;                                                       
+ 1094           ;                                               if(R_dat>0x72)//微调，需要定时，定时到后自动停止
+ 1094 82E7              ldi R24,114
+ 1096 20900200          lds R2,_R_dat
+ 109A 8215              cp R24,R2
+ 109C 08F0              brlo X148
+ 109E 1FC1              xjmp L281
+ 10A0           X148:
+ 10A0           X127:
+ 10A0                   .dbline 698
+ 10A0           ;                                               {
+ 10A0                   .dbline 699
+ 10A0           ;                                                       ETIFR=0x04;//清Timer3溢出中断标志
+ 10A0 84E0              ldi R24,4
+ 10A2 80937C00          sts 124,R24
+ 10A6                   .dbline 700
+ 10A6           ;                                                       ETIMSK = 0x04; //Timer3溢出中断使能，其它中断关闭
+ 10A6 80937D00          sts 125,R24
+ 10AA                   .dbline 701
+ 10AA           ;                                                       TCCR3B = 0x00;
+ 10AA 2224              clr R2
+ 10AC 20928A00          sts 138,R2
+ 10B0                   .dbline 703
+ 10B0           ; 
+ 10B0           ;                                                       j=(R_dat-0x72+1)/2;
+ 10B0 22E0              ldi R18,2
+ 10B2 30E0              ldi R19,0
+ 10B4 00910200          lds R16,_R_dat
+ 10B8 1127              clr R17
+ 10BA 0257              subi R16,114
+ 10BC 1040              sbci R17,0
+ 10BE 0F5F              subi R16,255  ; offset = 1
+ 10C0 1F4F              sbci R17,255
+ 10C2 0E940000          xcall div16s
+ 10C6 6801              movw R12,R16
+ 10C8                   .dbline 704
+ 10C8           ;                                                       j+=1;// 为了上位机软件能看到电流变化 ，每档都多加一秒
+ 10C8 C601              movw R24,R12
+ 10CA 0196              adiw R24,1
+ 10CC                   .dbline 705
+ 10CC           ;                                                       j=j*7812;
+ 10CC 04E8              ldi R16,7812
+ 10CE 1EE1              ldi R17,30
+ 10D0 9C01              movw R18,R24
+ 10D2 0E940000          xcall empy16s
+ 10D6 6801              movw R12,R16
+ 10D8                   .dbline 706
+ 10D8           ;                                                       j=65536-j;
+ 10D8 1601              movw R2,R12
+ 10DA 4424              clr R4
+ 10DC 5524              clr R5
+ 10DE 40E0              ldi R20,0
+ 10E0 50E0              ldi R21,0
+ 10E2 61E0              ldi R22,1
+ 10E4 70E0              ldi R23,0
+ 10E6 4219              sub R20,R2
+ 10E8 5309              sbc R21,R3
+ 10EA 6409              sbc R22,R4
+ 10EC 7509              sbc R23,R5
+ 10EE                   .dbline 707
+ 10EE           ;                                                       j+=1;
+ 10EE CA01              movw R24,R20
+ 10F0 0196              adiw R24,1
+ 10F2 6C01              movw R12,R24
+ 10F4                   .dbline 709
+ 10F4           ; 
+ 10F4           ;                                                       TCNT3H = j>>8;  //最小1秒，最多5秒
+ 10F4 1C01              movw R2,R24
+ 10F6 232C              mov R2,R3
+ 10F8 3324              clr R3
+ 10FA 20928900          sts 137,R2
+ 10FE                   .dbline 710
+ 10FE           ;                                                       TCNT3L = j;
+ 10FE C0928800          sts 136,R12
+ 1102                   .dbline 712
+ 1102           ; 
+ 1102           ;                                                       TCCR3A = 0x00;
+ 1102 2224              clr R2
+ 1104 20928B00          sts 139,R2
+ 1108                   .dbline 713
+ 1108           ;                                                       TCCR3B = 0x05; //8M时钟，1024分频，定时1秒
+ 1108 85E0              ldi R24,5
+ 110A 80938A00          sts 138,R24
+ 110E                   .dbline 714
+ 110E           ;                                                       ETIFR=0x04;//清Timer3溢出中断标志
+ 110E 84E0              ldi R24,4
+ 1110 80937C00          sts 124,R24
+ 1114                   .dbline 715
+ 1114           ;                                               } 
+ 1114                   .dbline 716
+ 1114           ;                                               break;
+ 1114 E4C0              xjmp L281
+ 1116           L336:
+ 1116                   .dbline 719
+ 1116           ; 
+ 1116           ;                                       case 0x80://电机相关
+ 1116           ;                                               if(R_dat==0x80)//只开电机电源，不开电机
+ 1116 80910200          lds R24,_R_dat
+ 111A 8038              cpi R24,128
+ 111C 29F4              brne L337
+ 111E           X128:
+ 111E                   .dbline 720
+ 111E           ;                                               {                                                                
+ 111E                   .dbline 721
+ 111E           ;                                                       VM_Open();//开电机电源
+ 111E DE9A              sbi 0x1b,6
+ 1120                   .dbline 722
+ 1120           ;                                                   SendUart1(0); 
+ 1120 0027              clr R16
+ 1122 0E942F00          xcall _SendUart1
+ 1126                   .dbline 723
+ 1126           ;                                               }         
+ 1126 DBC0              xjmp L281
+ 1128           L337:
+ 1128                   .dbline 724
+ 1128           ;                                               else if(R_dat==0x81)//获取电机状态      
+ 1128 80910200          lds R24,_R_dat
+ 112C 8138              cpi R24,129
+ 112E 49F5              brne L339
+ 1130           X129:
+ 1130                   .dbline 725
+ 1130           ;                                               { 
+ 1130                   .dbline 726
+ 1130           ;                                                       CheckMotor(2); 
+ 1130 02E0              ldi R16,2
+ 1132 10E0              ldi R17,0
+ 1134 25DB              xcall _CheckMotor
+ 1136                   .dbline 728
+ 1136           ;                                                       //返回2字节电机状态
+ 1136           ;                                                    SendUart1(Motor1Status.i); 
+ 1136 00910B00          lds R16,_Motor1Status
+ 113A 10910C00          lds R17,_Motor1Status+1
+ 113E 0E942F00          xcall _SendUart1
+ 1142                   .dbline 729
+ 1142           ;                                                        CheckMotor(2); 
+ 1142 02E0              ldi R16,2
+ 1144 10E0              ldi R17,0
+ 1146 1CDB              xcall _CheckMotor
+ 1148                   .dbline 730
+ 1148           ;                                                    SendUart1(Motor1Status.i>>8); 
+ 1148 00910B00          lds R16,_Motor1Status
+ 114C 10910C00          lds R17,_Motor1Status+1
+ 1150 012F              mov R16,R17
+ 1152 1127              clr R17
+ 1154 0E942F00          xcall _SendUart1
+ 1158                   .dbline 731
+ 1158           ;                                                        CheckMotor(2); 
+ 1158 02E0              ldi R16,2
+ 115A 10E0              ldi R17,0
+ 115C 11DB              xcall _CheckMotor
+ 115E                   .dbline 733
+ 115E           ;                                                       //返回2字节电机状态
+ 115E           ;                                                   SendUart1(Motor2Status.i);  
+ 115E 00910900          lds R16,_Motor2Status
+ 1162 10910A00          lds R17,_Motor2Status+1
+ 1166 0E942F00          xcall _SendUart1
+ 116A                   .dbline 734
+ 116A           ;                                                       CheckMotor(2); 
+ 116A 02E0              ldi R16,2
+ 116C 10E0              ldi R17,0
+ 116E 08DB              xcall _CheckMotor
+ 1170                   .dbline 735
+ 1170           ;                                                   SendUart1(Motor2Status.i>>8); 
+ 1170 00910900          lds R16,_Motor2Status
+ 1174 10910A00          lds R17,_Motor2Status+1
+ 1178 012F              mov R16,R17
+ 117A 1127              clr R17
+ 117C 0E942F00          xcall _SendUart1
+ 1180                   .dbline 736
+ 1180           ;                                               }         
+ 1180 AEC0              xjmp L281
+ 1182           L339:
+ 1182                   .dbline 737
+ 1182           ;                                               else if(R_dat==0x82)//电机停止，同时停止二个电机
+ 1182 80910200          lds R24,_R_dat
+ 1186 8238              cpi R24,130
+ 1188 09F0              breq X149
+ 118A 48C0              xjmp L341
+ 118C           X149:
+ 118C           X130:
+ 118C                   .dbline 738
+ 118C           ;                                               {        
+ 118C                   .dbline 739
+ 118C           ;                                                   MOTORSTOP  //关电机
+ 118C                   .dbline 739
+ 118C 9698              cbi 0x12,6
+ 118E                   .dbline 739
+ 118E 9798              cbi 0x12,7
+ 1190                   .dbline 739
+ 1190 DA98              cbi 0x1b,2
+ 1192                   .dbline 739
+ 1192 DB98              cbi 0x1b,3
+ 1194                   .dbline 739
+ 1194 DE98              cbi 0x1b,6
+ 1196                   .dbline 739
+ 1196 80916500          lds R24,101
+ 119A 8D7F              andi R24,253
+ 119C 80936500          sts 101,R24
+ 11A0                   .dbline 739
+ 11A0 80916500          lds R24,101
+ 11A4 8E7F              andi R24,254
+ 11A6 80936500          sts 101,R24
+ 11AA                   .dbline 739
+ 11AA DC98              cbi 0x1b,4
+ 11AC                   .dbline 739
+ 11AC DD98              cbi 0x1b,5
+ 11AE                   .dbline 739
+ 11AE                   .dbline 740
+ 11AE           ;                                                       if(Motor1Status.s.RUN==1)//收放电机正在运行
+ 11AE 80910B00          lds R24,_Motor1Status
+ 11B2 90910C00          lds R25,_Motor1Status+1
+ 11B6 8170              andi R24,1
+ 11B8 9070              andi R25,0
+ 11BA 8130              cpi R24,1
+ 11BC E0E0              ldi R30,0
+ 11BE 9E07              cpc R25,R30
+ 11C0 71F4              brne L343
+ 11C2           X131:
+ 11C2                   .dbline 741
+ 11C2           ;                                                       {
+ 11C2                   .dbline 742
+ 11C2           ;                                                           Motor1Status.s.RUN=0;
+ 11C2 80910B00          lds R24,_Motor1Status
+ 11C6 90910C00          lds R25,_Motor1Status+1
+ 11CA 8E7F              andi R24,254
+ 11CC 90930C00          sts _Motor1Status+1,R25
+ 11D0 80930B00          sts _Motor1Status,R24
+ 11D4                   .dbline 743
+ 11D4           ;                                                               Motor1Status.s.CommandStop=1;
+ 11D4 8860              ori R24,8
+ 11D6 90930C00          sts _Motor1Status+1,R25
+ 11DA 80930B00          sts _Motor1Status,R24
+ 11DE                   .dbline 744
+ 11DE           ;                                                       }
+ 11DE           L343:
+ 11DE                   .dbline 745
+ 11DE           ;                                                       if(Motor2Status.s.RUN==1)//调节电机正在运行
+ 11DE 80910900          lds R24,_Motor2Status
+ 11E2 90910A00          lds R25,_Motor2Status+1
+ 11E6 8170              andi R24,1
+ 11E8 9070              andi R25,0
+ 11EA 8130              cpi R24,1
+ 11EC E0E0              ldi R30,0
+ 11EE 9E07              cpc R25,R30
+ 11F0 71F4              brne L345
+ 11F2           X132:
+ 11F2                   .dbline 746
+ 11F2           ;                                                       { 
+ 11F2                   .dbline 747
+ 11F2           ;                                                           Motor2Status.s.RUN=0;
+ 11F2 80910900          lds R24,_Motor2Status
+ 11F6 90910A00          lds R25,_Motor2Status+1
+ 11FA 8E7F              andi R24,254
+ 11FC 90930A00          sts _Motor2Status+1,R25
+ 1200 80930900          sts _Motor2Status,R24
+ 1204                   .dbline 748
+ 1204           ;                                                               Motor2Status.s.CommandStop=1;
+ 1204 8860              ori R24,8
+ 1206 90930A00          sts _Motor2Status+1,R25
+ 120A 80930900          sts _Motor2Status,R24
+ 120E                   .dbline 749
+ 120E           ;                                                       }
+ 120E           L345:
+ 120E                   .dbline 751
+ 120E           ;                                                       
+ 120E           ;                                                       CheckMotor(180);//让总线稳定后再回发
+ 120E 04EB              ldi R16,180
+ 1210 10E0              ldi R17,0
+ 1212 B6DA              xcall _CheckMotor
+ 1214                   .dbline 752
+ 1214           ;                                                       SendUart1(0);  
+ 1214 0027              clr R16
+ 1216 0E942F00          xcall _SendUart1
+ 121A                   .dbline 753
+ 121A           ;                                               }
+ 121A 61C0              xjmp L281
+ 121C           L341:
+ 121C                   .dbline 754
+ 121C           ;                                               else if(R_dat==0x83)//读取电机堵转电流档位和断路档位
+ 121C 80910200          lds R24,_R_dat
+ 1220 8338              cpi R24,131
+ 1222 41F5              brne L347
+ 1224           X133:
+ 1224                   .dbline 755
+ 1224           ;                                               {
+ 1224                   .dbline 756
+ 1224           ;                                                       Motor1Gear=EEPROM_read(0);//收放电机
+ 1224 0027              clr R16
+ 1226 1127              clr R17
+ 1228 B6D0              xcall _EEPROM_read
+ 122A C02E              mov R12,R16
+ 122C C0920800          sts _Motor1Gear,R12
+ 1230                   .dbline 757
+ 1230           ;                                                       Motor2Gear=EEPROM_read(1);//调节电机
+ 1230 01E0              ldi R16,1
+ 1232 10E0              ldi R17,0
+ 1234 B0D0              xcall _EEPROM_read
+ 1236 C02E              mov R12,R16
+ 1238 C0920700          sts _Motor2Gear,R12
+ 123C                   .dbline 758
+ 123C           ;                                                       MotorIdelGear=EEPROM_read(2); //电机断路
+ 123C 02E0              ldi R16,2
+ 123E 10E0              ldi R17,0
+ 1240 AAD0              xcall _EEPROM_read
+ 1242 C02E              mov R12,R16
+ 1244 C0920400          sts _MotorIdelGear,R12
+ 1248                   .dbline 759
+ 1248           ;                                                       Gear2Thr();
+ 1248 74DC              xcall _Gear2Thr
+ 124A                   .dbline 761
+ 124A           ; 
+ 124A           ;                                                       i=Motor2Gear;    
+ 124A A0900700          lds R10,_Motor2Gear
+ 124E                   .dbline 762
+ 124E           ;                                                       i<<=4;
+ 124E 8A2D              mov R24,R10
+ 1250 8F70              andi R24,#0x0F
+ 1252 8295              swap R24
+ 1254 A82E              mov R10,R24
+ 1256                   .dbline 763
+ 1256           ;                                                       i|=Motor1Gear; 
+ 1256 20900800          lds R2,_Motor1Gear
+ 125A A228              or R10,R2
+ 125C                   .dbline 764
+ 125C           ;                                                       SendUart1(i); 
+ 125C 0A2D              mov R16,R10
+ 125E 0E942F00          xcall _SendUart1
+ 1262                   .dbline 765
+ 1262           ;                                                       CheckMotor(2);
+ 1262 02E0              ldi R16,2
+ 1264 10E0              ldi R17,0
+ 1266 8CDA              xcall _CheckMotor
+ 1268                   .dbline 766
+ 1268           ;                                                       i=MotorIdelGear;
+ 1268 A0900400          lds R10,_MotorIdelGear
+ 126C                   .dbline 767
+ 126C           ;                                                       SendUart1(i); 
+ 126C 0A2D              mov R16,R10
+ 126E 0E942F00          xcall _SendUart1
+ 1272                   .dbline 768
+ 1272           ;                                               }       
+ 1272 35C0              xjmp L281
+ 1274           L347:
+ 1274                   .dbline 769
+ 1274           ;                                               else if(R_dat>0x89)//0x8a~0x8f,设置调节电机过流堵转档位
+ 1274 89E8              ldi R24,137
+ 1276 20900200          lds R2,_R_dat
+ 127A 8215              cp R24,R2
+ 127C 68F4              brsh L349
+ 127E           X134:
+ 127E                   .dbline 770
+ 127E           ;                                               {
+ 127E                   .dbline 771
+ 127E           ;                                                   Motor2Gear=R_dat-0x89;//对应1~6档 
+ 127E 822D              mov R24,R2
+ 1280 8958              subi R24,137
+ 1282 80930700          sts _Motor2Gear,R24
+ 1286                   .dbline 772
+ 1286           ;                                                       EEPROM_write(1,Motor2Gear);
+ 1286 282F              mov R18,R24
+ 1288 01E0              ldi R16,1
+ 128A 10E0              ldi R17,0
+ 128C 7CD0              xcall _EEPROM_write
+ 128E                   .dbline 773
+ 128E           ;                                                       Gear2Thr();
+ 128E 51DC              xcall _Gear2Thr
+ 1290                   .dbline 774
+ 1290           ;                                                       SendUart1(0); 
+ 1290 0027              clr R16
+ 1292 0E942F00          xcall _SendUart1
+ 1296                   .dbline 775
+ 1296           ;                                               }       
+ 1296 23C0              xjmp L281
+ 1298           L349:
+ 1298                   .dbline 776
+ 1298           ;                                               else if(R_dat>0x83)//0x84~0x89,设置收放电机堵转档位
+ 1298 83E8              ldi R24,131
+ 129A 20900200          lds R2,_R_dat
+ 129E 8215              cp R24,R2
+ 12A0 F0F4              brsh L281
+ 12A2           X135:
+ 12A2                   .dbline 777
+ 12A2           ;                                               {
+ 12A2                   .dbline 778
+ 12A2           ;                                                   Motor1Gear=R_dat-0x83;//对应1~6档 
+ 12A2 822D              mov R24,R2
+ 12A4 8358              subi R24,131
+ 12A6 80930800          sts _Motor1Gear,R24
+ 12AA                   .dbline 779
+ 12AA           ;                                                       EEPROM_write(0,Motor1Gear);
+ 12AA 282F              mov R18,R24
+ 12AC 0027              clr R16
+ 12AE 1127              clr R17
+ 12B0 6AD0              xcall _EEPROM_write
+ 12B2                   .dbline 780
+ 12B2           ;                                                       Gear2Thr();
+ 12B2 3FDC              xcall _Gear2Thr
+ 12B4                   .dbline 781
+ 12B4           ;                                                       SendUart1(0); 
+ 12B4 0027              clr R16
+ 12B6 0E942F00          xcall _SendUart1
+ 12BA                   .dbline 782
+ 12BA           ;                                               }         
+ 12BA                   .dbline 783
+ 12BA           ;                                               break;
+ 12BA 11C0              xjmp L281
+ 12BC           L353:
+ 12BC                   .dbline 786
+ 12BC           ; 
+ 12BC           ;                                       case 0x90: 
+ 12BC           ;                                               if(R_dat>0x99)//0x9a~0x99，设置电机断路电流档位
+ 12BC 89E9              ldi R24,153
+ 12BE 20900200          lds R2,_R_dat
+ 12C2 8215              cp R24,R2
+ 12C4 60F4              brsh L281
+ 12C6           X136:
+ 12C6                   .dbline 787
+ 12C6           ;                                               {
+ 12C6                   .dbline 788
+ 12C6           ;                                                       MotorIdelGear=R_dat-0x99;
+ 12C6 822D              mov R24,R2
+ 12C8 8959              subi R24,153
+ 12CA 80930400          sts _MotorIdelGear,R24
+ 12CE                   .dbline 789
+ 12CE           ;                                                       EEPROM_write(2,MotorIdelGear);  
+ 12CE 282F              mov R18,R24
+ 12D0 02E0              ldi R16,2
+ 12D2 10E0              ldi R17,0
+ 12D4 58D0              xcall _EEPROM_write
+ 12D6                   .dbline 790
+ 12D6           ;                                                       Gear2Thr(); 
+ 12D6 2DDC              xcall _Gear2Thr
+ 12D8                   .dbline 791
+ 12D8           ;                                                       SendUart1(0);  
+ 12D8 0027              clr R16
+ 12DA 0E942F00          xcall _SendUart1
+ 12DE                   .dbline 792
+ 12DE           ;                                               }                               
+ 12DE                   .dbline 793
+ 12DE           ;                                               break;
+ 12DE                   .dbline 796
+ 12DE           ; 
+ 12DE           ;                                       default: 
+ 12DE           ;                                               break;  
+ 12DE           L281:
+ 12DE                   .dbline 798
+ 12DE           ;                               }
+ 12DE           ;                       IntFlag=0;
+ 12DE 2224              clr R2
+ 12E0 20920100          sts _IntFlag,R2
+ 12E4                   .dbline 799
+ 12E4           ;               }  
+ 12E4           L278:
+ 12E4                   .dbline 800
+ 12E4           ;       }
+ 12E4           L276:
+ 12E4                   .dbline 519
+ 12E4 B0CC              xjmp L275
+ 12E6           X137:
+ 12E6                   .dbline -2
+ 12E6           L266:
+ 12E6                   .dbline 0 ; func end
+ 12E6 2896              adiw R28,8
+ 12E8 0895              ret
+ 12EA                   .dbsym l f 4 D
+ 12EA                   .dbsym r i 10 c
+ 12EA                   .dbsym l l 0 l
+ 12EA                   .dbsym r j 12 i
+ 12EA                   .dbend
+                        .area vector(rom, abs)
+                        .org 92
+ 005C 0C947509          jmp _E_comp
+                        .area text(rom, con, rel)
+ 12EA                   .dbfile D:\chen\Core\FirmWare_CT\CT_MOTOR_V30\main.c
+ 12EA                   .dbfunc e E_comp _E_comp fV
+                        .even
+ 12EA           _E_comp::
+ 12EA 8A93              st -y,R24
+ 12EC 9A93              st -y,R25
+ 12EE AA93              st -y,R26
+ 12F0 EA93              st -y,R30
+ 12F2 8FB7              IN R24,63
+ 12F4 8A93              st -y,R24
+ 12F6                   .dbline -1
+ 12F6                   .dbline 805
+ 12F6           ; }
+ 12F6           ; 
+ 12F6           ; #pragma interrupt_handler E_comp:24
+ 12F6           ; void E_comp(void)  //模拟比较器中断,总线电压被拉低到42.23V后，立即停电机(R2要改成30k)
+ 12F6           ; {   
+ 12F6                   .dbline 806
+ 12F6           ;   MOTORSTOP  //关电机 
+ 12F6                   .dbline 806
+ 12F6 9698              cbi 0x12,6
+ 12F8                   .dbline 806
+ 12F8 9798              cbi 0x12,7
+ 12FA                   .dbline 806
+ 12FA DA98              cbi 0x1b,2
+ 12FC                   .dbline 806
+ 12FC DB98              cbi 0x1b,3
+ 12FE                   .dbline 806
+ 12FE DE98              cbi 0x1b,6
+ 1300                   .dbline 806
+ 1300 80916500          lds R24,101
+ 1304 8D7F              andi R24,253
+ 1306 80936500          sts 101,R24
+ 130A                   .dbline 806
+ 130A 80916500          lds R24,101
+ 130E 8E7F              andi R24,254
+ 1310 80936500          sts 101,R24
+ 1314                   .dbline 806
+ 1314 DC98              cbi 0x1b,4
+ 1316                   .dbline 806
+ 1316 DD98              cbi 0x1b,5
+ 1318                   .dbline 806
+ 1318                   .dbline 807
+ 1318           ;   if(Motor1Status.s.RUN==1)//收放电机欠压堵转
+ 1318 80910B00          lds R24,_Motor1Status
+ 131C 90910C00          lds R25,_Motor1Status+1
+ 1320 8170              andi R24,1
+ 1322 9070              andi R25,0
+ 1324 8130              cpi R24,1
+ 1326 E0E0              ldi R30,0
+ 1328 9E07              cpc R25,R30
+ 132A 71F4              brne L362
+ 132C           X150:
+ 132C                   .dbline 808
+ 132C           ;    {
+ 132C                   .dbline 809
+ 132C           ;        Motor1Status.s.UnderVoltage=1;
+ 132C 80910B00          lds R24,_Motor1Status
+ 1330 90910C00          lds R25,_Motor1Status+1
+ 1334 8062              ori R24,32
+ 1336 90930C00          sts _Motor1Status+1,R25
+ 133A 80930B00          sts _Motor1Status,R24
+ 133E                   .dbline 810
+ 133E           ;        Motor1Status.s.RUN=0;//停止状态
+ 133E 8E7F              andi R24,254
+ 1340 90930C00          sts _Motor1Status+1,R25
+ 1344 80930B00          sts _Motor1Status,R24
+ 1348                   .dbline 811
+ 1348           ;    }
+ 1348           L362:
+ 1348                   .dbline 812
+ 1348           ;   if(Motor2Status.s.RUN==1)//调节电机欠压堵转
+ 1348 80910900          lds R24,_Motor2Status
+ 134C 90910A00          lds R25,_Motor2Status+1
+ 1350 8170              andi R24,1
+ 1352 9070              andi R25,0
+ 1354 8130              cpi R24,1
+ 1356 E0E0              ldi R30,0
+ 1358 9E07              cpc R25,R30
+ 135A 71F4              brne L364
+ 135C           X151:
+ 135C                   .dbline 813
+ 135C           ;    { 
+ 135C                   .dbline 814
+ 135C           ;        Motor2Status.s.UnderVoltage=1;
+ 135C 80910900          lds R24,_Motor2Status
+ 1360 90910A00          lds R25,_Motor2Status+1
+ 1364 8062              ori R24,32
+ 1366 90930A00          sts _Motor2Status+1,R25
+ 136A 80930900          sts _Motor2Status,R24
+ 136E                   .dbline 815
+ 136E           ;        Motor2Status.s.RUN=0;//停止状态
+ 136E 8E7F              andi R24,254
+ 1370 90930A00          sts _Motor2Status+1,R25
+ 1374 80930900          sts _Motor2Status,R24
+ 1378                   .dbline 816
+ 1378           ;    }   
+ 1378           L364:
+ 1378                   .dbline -2
+ 1378           L361:
+ 1378                   .dbline 0 ; func end
+ 1378 8991              ld R24,y+
+ 137A 8FBF              OUT 63,R24
+ 137C E991              ld R30,y+
+ 137E A991              ld R26,y+
+ 1380 9991              ld R25,y+
+ 1382 8991              ld R24,y+
+ 1384 1895              reti
+ 1386                   .dbend
+ 1386                   .dbfunc e EEPROM_write _EEPROM_write fV
+ 1386           ;           Data -> R18
+ 1386           ;        Address -> R16,R17
+                        .even
+ 1386           _EEPROM_write::
+ 1386                   .dbline -1
+ 1386                   .dbline 821
+ 1386           ; }
+ 1386           ; 
+ 1386           ; 
+ 1386           ; void EEPROM_write(unsigned int Address,unsigned char Data)    //内部EEPROM写
+ 1386           ; {//时钟频率为1MHz，典型的EEPROM字节写耗时约8.5ms
+ 1386           L367:
+ 1386                   .dbline 822
+ 1386           ;     while(EECR&0x02);                   // 等待上一次写操作结束
+ 1386           L368:
+ 1386                   .dbline 822
+ 1386 E199              sbic 0x1c,1
+ 1388 FECF              rjmp L367
+ 138A           X152:
+ 138A                   .dbline 823
+ 138A           ;     EEAR=Address;
+ 138A 1FBB              out 0x1f,R17
+ 138C 0EBB              out 0x1e,R16
+ 138E                   .dbline 824
+ 138E           ;     EEDR=Data;                                // 设置地址和数据寄存器
+ 138E 2DBB              out 0x1d,R18
+ 1390                   .dbline 825
+ 1390           ;     EECR|=0x04;                         //置位EEMWE
+ 1390 E29A              sbi 0x1c,2
+ 1392                   .dbline 826
+ 1392           ;     EECR|=0x02;                         //置位EEWE 以启动写操作
+ 1392 E19A              sbi 0x1c,1
+ 1394                   .dbline -2
+ 1394           L366:
+ 1394                   .dbline 0 ; func end
+ 1394 0895              ret
+ 1396                   .dbsym r Data 18 c
+ 1396                   .dbsym r Address 16 i
+ 1396                   .dbend
+ 1396                   .dbfunc e EEPROM_read _EEPROM_read fc
+ 1396           ;        Address -> R16,R17
+                        .even
+ 1396           _EEPROM_read::
+ 1396                   .dbline -1
+ 1396                   .dbline 830
+ 1396           ; }
+ 1396           ; 
+ 1396           ; unsigned char EEPROM_read(unsigned int Address)                               //内部EEPROM读
+ 1396           ; {
+ 1396           L371:
+ 1396                   .dbline 831
+ 1396           ;     while(EECR&0x02);                                 //等待上一次操作结束
+ 1396           L372:
+ 1396                   .dbline 831
+ 1396 E199              sbic 0x1c,1
+ 1398 FECF              rjmp L371
+ 139A           X153:
+ 139A                   .dbline 832
+ 139A           ;     EEAR = Address;                     //设置地址寄存器                                              
+ 139A 1FBB              out 0x1f,R17
+ 139C 0EBB              out 0x1e,R16
+ 139E                   .dbline 833
+ 139E           ;       EECR|=0x01;                                     //设置EERE 以启动读操作
+ 139E E09A              sbi 0x1c,0
+ 13A0                   .dbline 834
+ 13A0           ;     return EEDR;                              //自数据寄存器返回数据
+ 13A0 0DB3              in R16,0x1d
+ 13A2                   .dbline -2
+ 13A2           L370:
+ 13A2                   .dbline 0 ; func end
+ 13A2 0895              ret
+ 13A4                   .dbsym r Address 16 i
+ 13A4                   .dbend
+                        .area bss(ram, con, rel)
+ 0000                   .dbfile D:\chen\Core\FirmWare_CT\CT_MOTOR_V30\main.c
+ 0000           _Tt::
+ 0000                   .blkb 1
+ 0001                   .dbsym e Tt _Tt c
+ 0001           _IntFlag::
+ 0001                   .blkb 1
+ 0002                   .dbsym e IntFlag _IntFlag c
+ 0002           _R_dat::
+ 0002                   .blkb 1
+ 0003                   .dbsym e R_dat _R_dat c
+ 0003           _MotorIdelCur::
+ 0003                   .blkb 1
+ 0004                   .dbsym e MotorIdelCur _MotorIdelCur c
+ 0004           _MotorIdelGear::
+ 0004                   .blkb 1
+ 0005                   .dbsym e MotorIdelGear _MotorIdelGear c
+ 0005           _Motor2Thr::
+ 0005                   .blkb 1
+ 0006                   .dbsym e Motor2Thr _Motor2Thr c
+ 0006           _Motor1Thr::
+ 0006                   .blkb 1
+ 0007                   .dbsym e Motor1Thr _Motor1Thr c
+ 0007           _Motor2Gear::
+ 0007                   .blkb 1
+ 0008                   .dbsym e Motor2Gear _Motor2Gear c
+ 0008           _Motor1Gear::
+ 0008                   .blkb 1
+ 0009                   .dbsym e Motor1Gear _Motor1Gear c
+ 0009           _Motor2Status::
+ 0009                   .blkb 2
+ 000B                   .dbstruct 0 2 .1
+ 000B                   .dbfield 0 RUN F[0:1]
+ 000B                   .dbfield 0 DIR F[1:1]
+ 000B                   .dbfield 0 BrokenStop F[2:1]
+ 000B                   .dbfield 0 CommandStop F[3:1]
+ 000B                   .dbfield 0 OverCurrent F[4:1]
+ 000B                   .dbfield 0 UnderVoltage F[5:1]
+ 000B                   .dbfield 0 StartResult F[6:2]
+ 000B                   .dbfield 0 ThisCurrent F[8:8]
+ 000B                   .dbend
+ 000B                   .dbunion 0 2 MotorStatus
+ 000B                   .dbfield 0 i i
+ 000B                   .dbfield 0 s S[.1]
+ 000B                   .dbend
+ 000B                   .dbsym e Motor2Status _Motor2Status S[MotorStatus]
+ 000B           _Motor1Status::
+ 000B                   .blkb 2
+ 000D                   .dbsym e Motor1Status _Motor1Status S[MotorStatus]
+ 000D           _myFIB::
+ 000D                   .blkb 4
+ 0011                   .dbunion 0 4 FIB
+ 0011                   .dbfield 0 f D
+ 0011                   .dbfield 0 i A[4:2]i
+ 0011                   .dbfield 0 b A[4:4]c
+ 0011                   .dbend
+ 0011                   .dbsym e myFIB _myFIB S[FIB]
+                        .area lit(rom, con, rel)
+ 0000           L285:
+ 0000 F3C8AF3E          .word 0xc8f3,0x3eaf
+ 0004           L241:
+ 0004 D1228B3F          .word 0x22d1,0x3f8b
+ 0008           L229:
+ 0008 0000FA40          .word 0x0,0x40fa
+ 000C           ; }    
+ 000C           ; 
+ 000C           ;  

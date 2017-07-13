@@ -1,0 +1,67 @@
+; Code Composer Project File, Version 2.0 (do not modify or remove this line)
+
+[Project Settings]
+ProjectName="AD"
+ProjectDir="C:\DSPBootloader\"
+ProjectType=Executable
+CPUFamily=TMS320C28XX
+Tool="Compiler"
+Tool="CustomBuilder"
+Tool="DspBiosBuilder"
+Tool="Linker"
+Config="Debug"
+Config="Release"
+
+[Source Files]
+Source="DSP28_DefaultIsr.c"
+Source="DSP28_Ev.c"
+Source="DSP28_GlobalVariableDefs.c"
+Source="DSP28_Gpio.c"
+Source="DSP28_PieCtrl.c"
+Source="DSP28_PieVect.c"
+Source="DSP28_Sci.c"
+Source="DSP28_SysCtrl.c"
+Source="fir.h"
+Source="Flash2811_API_V210.lib"
+Source="Flash281x_API_Config.h"
+Source="Flash281x_API_Library.h"
+Source="main.c"
+Source="rts2800n.lib"
+Source="FLASH.CMD"
+
+["Compiler" Settings: "Debug"]
+Options=-g -q -fr"C:\DSPBootloader\Debug" -d"_DEBUG" -d"LARGE_MODEL" -ml -v28
+
+["Compiler" Settings: "Release"]
+Options=-q -fr"C:\DSPBootloader\Release" -d"LARGE_MODEL" -ml -v28
+
+["DspBiosBuilder" Settings: "Debug"]
+Options=-v28
+
+["DspBiosBuilder" Settings: "Release"]
+Options=-v28
+
+["Linker" Settings: "Debug"]
+Options=-q -a -c -m"AD.MAP" -o".\Debug\AD.out" -x
+
+["Linker" Settings: "Release"]
+Options=-q -c -m".\Release\AD.map" -o".\Release\AD.out" -x
+
+["fir.h" Settings: "Debug"]
+ExcludeFromBuild=true
+
+["fir.h" Settings: "Release"]
+ExcludeFromBuild=true
+
+["Flash281x_API_Config.h" Settings: "Debug"]
+ExcludeFromBuild=true
+
+["Flash281x_API_Config.h" Settings: "Release"]
+ExcludeFromBuild=true
+
+["Flash281x_API_Library.h" Settings: "Debug"]
+ExcludeFromBuild=true
+
+["Flash281x_API_Library.h" Settings: "Release"]
+ExcludeFromBuild=true
+

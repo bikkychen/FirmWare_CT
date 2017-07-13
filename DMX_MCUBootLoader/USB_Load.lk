@@ -1,0 +1,1 @@
+main.o DEVICE.o SPI_HW.o 

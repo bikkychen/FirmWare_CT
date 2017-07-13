@@ -1,0 +1,9 @@
+[Files]
+main.c
+DEVICE.C
+SPI_HW.C
+HAL.H
+CH374INC.H
+iom128v.h
+[Headers]
+[Documents]

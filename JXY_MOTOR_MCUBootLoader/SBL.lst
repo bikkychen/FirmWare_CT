@@ -1,0 +1,864 @@
+Interrupt Vectors
+
+Program Code (text area)
+__start|__text_start:
+    0F048 E001      LDI	R16,1
+    0F049 BF05      OUT	0x35,R16
+    0F04A E002      LDI	R16,2
+    0F04B BF05      OUT	0x35,R16
+    0F04C EFCF      LDI	R28,0xFF
+    0F04D E1D0      LDI	R29,0x10
+    0F04E BFCD      OUT	0x3D,R28
+    0F04F BFDE      OUT	0x3E,R29
+    0F050 50C0      SUBI	R28,0
+    0F051 40D1      SBCI	R29,1
+    0F052 EA0A      LDI	R16,0xAA
+    0F053 8308      ST	Y,R16
+    0F054 2400      CLR	R0
+    0F055 E0E4      LDI	R30,4
+    0F056 E0F1      LDI	R31,1
+    0F057 E012      LDI	R17,2
+    0F058 39E5      CPI	R30,0x95
+    0F059 07F1      CPC	R31,R17
+    0F05A F011      BEQ	0xF05D
+    0F05B 9201      ST	Z+,R0
+    0F05C CFFB      RJMP	0xF058
+    0F05D 8300      ST	Z,R16
+    0F05E E8EC      LDI	R30,0x8C
+    0F05F EEF0      LDI	R31,0xE0
+    0F060 E0A0      LDI	R26,0
+    0F061 E0B1      LDI	R27,1
+    0F062 EE10      LDI	R17,0xE0
+    0F063 E001      LDI	R16,1
+    0F064 BF0B      OUT	0x3B,R16
+    0F065 39E0      CPI	R30,0x90
+    0F066 07F1      CPC	R31,R17
+    0F067 F021      BEQ	0xF06C
+    0F068 95D8      ELPM
+    0F069 9631      ADIW	R30,1
+    0F06A 920D      ST	X+,R0
+    0F06B CFF9      RJMP	0xF065
+    0F06C 940E F155 CALL	_main
+_exit:
+    0F06E CFFF      RJMP	_exit
+_boot_page_ew:
+  code                 --> R16
+  p_address            --> Y,+0
+    0F06F 940E F274 CALL	push_arg4
+    0F071 810C      LDD	R16,Y+4
+FILE: D:\chen\Core\FirmWare_CT\JXY_MOTOR_MCUBootLoader\SBL.c
+(0001) #include <iom128v.h>								   	
+(0002) #include <macros.h>
+(0003) #include <stdio.h>
+(0004) 
+(0005)  
+(0006) //电机板引导程序
+(0007) 
+(0008) #define  BB     0x00        //固件版本号
+(0009) 
+(0010) #define INT_EN		{ SEI(); }
+(0011) #define INT_DIS		{ CLI(); }
+(0012) 
+(0013) unsigned int   R_dat; 
+(0014) unsigned char IntFlag;//接收帧状态
+(0015) unsigned char UpdateBegin;//接收主程序数据开始标志
+(0016) unsigned int DataReCn;
+(0017) unsigned char crc16hi,crc16lo,DownloadSpeed;
+(0018) unsigned int Timer3Cn;
+(0019)  
+(0020) 
+(0021) unsigned char  Uart1RxCounter;
+(0022) unsigned char  Uart1RxData[128];
+(0023) 
+(0024) unsigned char TimeOutFlag;
+(0025) 
+(0026) char flash_buf[258]; //FALSH页缓冲区,M128的一个Flash页为256字节(128字) //暂只支持64K地址编程
+(0027) long address = 0; 
+(0028) unsigned int T2cn;
+(0029) 
+(0030) void Start(void);
+(0031) 
+(0032)  
+(0033)  
+(0034) void Delay30Ms(void);
+(0035) 
+(0036) //void EEPROM_write(unsigned int Address,unsigned char Data);
+(0037) //unsigned char EEPROM_read(unsigned int Address) ;
+(0038) 
+(0039) 
+(0040) 
+(0041) 
+(0042) //擦除(code=0x03)和写入(code=0x05)一个Flash页 
+(0043) void boot_page_ew(long p_address,char code) 
+(0044) { 
+(0045)     asm("mov r30,r16\n" 
+    0F072 2FE0      MOV	R30,R16
+    0F073 2FF1      MOV	R31,R17
+    0F074 BF2B      OUT	0x3B,R18
+(0046)         "mov r31,r17\n" 
+(0047)         "out 0x3b,r18\n");            //将页地址放入Z寄存器和RAMPZ的Bit0中 
+(0048)     SPMCSR = code;                //寄存器SPMCSR中为操作码 
+    0F075 9300 0068 STS	0x68,R16
+(0049)     asm("spm\n");                    //对指定Flash页进行操作 
+    0F077 95E8      SPM
+    0F078 9624      ADIW	R28,4
+    0F079 9508      RET
+_boot_page_fill:
+  data                 --> Y,+2
+  address              --> Y,+0
+    0F07A 940E F274 CALL	push_arg4
+(0050) }         
+(0051) //填充Flash缓冲页中的一个字 
+(0052) void boot_page_fill(unsigned int address,int data) 
+(0053) { 
+(0054)     asm("mov r30,r16\n" 
+    0F07C 2FE0      MOV	R30,R16
+    0F07D 2FF1      MOV	R31,R17
+    0F07E 2E02      MOV	R0,R18
+    0F07F 2E13      MOV	R1,R19
+(0055)         "mov r31,r17\n"             //Z寄存器中为填冲页内地址 
+(0056)         "mov r0,r18\n" 
+(0057)         "mov r1,r19\n");            //R0R1中为一个指令字 
+(0058)     SPMCSR = 0x01; 
+    0F080 E081      LDI	R24,1
+    0F081 9380 0068 STS	0x68,R24
+(0059)     asm("spm\n"); 
+    0F083 95E8      SPM
+    0F084 9624      ADIW	R28,4
+    0F085 9508      RET
+(0060) } 
+(0061) //等待一个Flash页的写完成 
+(0062) void wait_page_rw_ok(void) 
+(0063) { 
+_wait_page_rw_ok:
+    0F086 C008      RJMP	0xF08F
+(0064)       while(SPMCSR & 0x40) 
+(0065)      { 
+(0066)          while(SPMCSR & 0x01); 
+    0F087 9020 0068 LDS	R2,0x68
+    0F089 FC20      SBRC	R2,0
+    0F08A CFFC      RJMP	0xF087
+(0067)          SPMCSR = 0x11; 
+    0F08B E181      LDI	R24,0x11
+    0F08C 9380 0068 STS	0x68,R24
+(0068)          asm("spm\n"); 
+    0F08E 95E8      SPM
+    0F08F 9020 0068 LDS	R2,0x68
+    0F091 FC26      SBRC	R2,6
+    0F092 CFF4      RJMP	0xF087
+    0F093 9508      RET
+_write_one_page:
+  i                    --> R20
+    0F094 934A      ST	-Y,R20
+    0F095 935A      ST	-Y,R21
+    0F096 9721      SBIW	R28,1
+(0069)      } 
+(0070) } 
+(0071) //更新一个Flash页的完整处理 
+(0072) void write_one_page(void) 
+(0073) { 
+(0074)     int i; 
+(0075)     boot_page_ew(address,0x03);                    //擦除一个Flash页 
+    0F097 E083      LDI	R24,3
+    0F098 8388      ST	Y,R24
+    0F099 9120 0102 LDS	R18,address+2
+    0F09B 9130 0103 LDS	R19,address+3
+    0F09D 9100 0100 LDS	R16,address
+    0F09F 9110 0101 LDS	R17,address+1
+    0F0A1 DFCD      RCALL	_boot_page_ew
+(0076)     
+(0077)     wait_page_rw_ok();                            //等待擦除完成 
+    0F0A2 DFE3      RCALL	_wait_page_rw_ok
+(0078)     for(i=0;i<256;i+=2)                //将数据填入Flash缓冲页中 
+    0F0A3 2744      CLR	R20
+    0F0A4 2755      CLR	R21
+(0079)     { 
+(0080)         boot_page_fill(i, flash_buf[i+2]+(flash_buf[i+3]<<8)); 
+    0F0A5 E089      LDI	R24,0x9
+    0F0A6 E091      LDI	R25,1
+    0F0A7 01FA      MOVW	R30,R20
+    0F0A8 0FE8      ADD	R30,R24
+    0F0A9 1FF9      ADC	R31,R25
+    0F0AA 8020      LD	R2,Z
+    0F0AB 2433      CLR	R3
+    0F0AC 2C32      MOV	R3,R2
+    0F0AD 2422      CLR	R2
+    0F0AE E088      LDI	R24,0x8
+    0F0AF E091      LDI	R25,1
+    0F0B0 01FA      MOVW	R30,R20
+    0F0B1 0FE8      ADD	R30,R24
+    0F0B2 1FF9      ADC	R31,R25
+    0F0B3 8120      LD	R18,Z
+    0F0B4 2733      CLR	R19
+    0F0B5 0D22      ADD	R18,R2
+    0F0B6 1D33      ADC	R19,R3
+    0F0B7 018A      MOVW	R16,R20
+    0F0B8 DFC1      RCALL	_boot_page_fill
+    0F0B9 5F4E      SUBI	R20,0xFE
+    0F0BA 4F5F      SBCI	R21,0xFF
+    0F0BB 3040      CPI	R20,0
+    0F0BC E0E1      LDI	R30,1
+    0F0BD 075E      CPC	R21,R30
+    0F0BE F334      BLT	0xF0A5
+(0081)     } 
+(0082)     boot_page_ew(address,0x05);                    //将缓冲页数据写入一个Flash页 
+    0F0BF E085      LDI	R24,5
+    0F0C0 8388      ST	Y,R24
+    0F0C1 9120 0102 LDS	R18,address+2
+    0F0C3 9130 0103 LDS	R19,address+3
+    0F0C5 9100 0100 LDS	R16,address
+    0F0C7 9110 0101 LDS	R17,address+1
+    0F0C9 DFA5      RCALL	_boot_page_ew
+(0083)    
+(0084)    
+(0085)     wait_page_rw_ok();                            //等待写入完成 
+    0F0CA DFBB      RCALL	_wait_page_rw_ok
+    0F0CB 9621      ADIW	R28,1
+    0F0CC 9159      LD	R21,Y+
+    0F0CD 9149      LD	R20,Y+
+    0F0CE 9508      RET
+(0086) }        
+(0087) 
+(0088) 
+(0089)  
+(0090) //UART1 initialize
+(0091) // desired baud rate: 57600
+(0092) // actual: baud rate:58824 (2.1%)
+(0093) // char size: 8 bit
+(0094) // parity: Disabled
+(0095) void uart1_init(void)
+(0096) {
+(0097)  UCSR1B = 0x00; //disable while setting baud rate
+_uart1_init:
+    0F0CF 2422      CLR	R2
+    0F0D0 9220 009A STS	0x9A,R2
+(0098)  UCSR1A = 0x02;
+    0F0D2 E082      LDI	R24,2
+    0F0D3 9380 009B STS	0x9B,R24
+(0099)  UCSR1C = 0x06;
+    0F0D5 E086      LDI	R24,6
+    0F0D6 9380 009D STS	0x9D,R24
+(0100)  UBRR1L = 0x10; //set baud rate lo 57600
+    0F0D8 E180      LDI	R24,0x10
+    0F0D9 9380 0099 STS	0x99,R24
+(0101)  UBRR1H = 0x00; //set baud rate hi
+    0F0DB 9220 0098 STS	0x98,R2
+(0102)  UCSR1B = 0x98;
+    0F0DD E988      LDI	R24,0x98
+    0F0DE 9380 009A STS	0x9A,R24
+    0F0E0 9508      RET
+_uart1_rx_isr:
+    0F0E1 922A      ST	-Y,R2
+    0F0E2 923A      ST	-Y,R3
+    0F0E3 938A      ST	-Y,R24
+    0F0E4 B62F      IN	R2,0x3F
+    0F0E5 922A      ST	-Y,R2
+(0103) }
+(0104) 
+(0105) #pragma interrupt_handler uart1_rx_isr:iv_USART1_RXC
+(0106) void uart1_rx_isr(void)//串口1接收中断
+(0107) {
+(0108)  R_dat=UDR1;//接收串口数据,同时清空串口接收中断标志
+    0F0E6 9020 009C LDS	R2,0x9C
+    0F0E8 2433      CLR	R3
+    0F0E9 9230 0294 STS	R_dat+1,R3
+    0F0EB 9220 0293 STS	R_dat,R2
+(0109)  IntFlag=1;
+    0F0ED E081      LDI	R24,1
+    0F0EE 9380 0292 STS	IntFlag,R24
+    0F0F0 9029      LD	R2,Y+
+    0F0F1 BE2F      OUT	0x3F,R2
+    0F0F2 9189      LD	R24,Y+
+    0F0F3 9039      LD	R3,Y+
+    0F0F4 9029      LD	R2,Y+
+    0F0F5 9518      RETI
+(0110) }
+(0111) 
+(0112)  
+(0113) 
+(0114) void quit(void) 
+(0115) {
+(0116)     MCUCR = 0x01; 
+_quit:
+    0F0F6 E081      LDI	R24,1
+    0F0F7 BF85      OUT	0x35,R24
+(0117)     MCUCR = 0x00;       //将中断向量表迁移到应用程序区头部 
+    0F0F8 2422      CLR	R2
+    0F0F9 BE25      OUT	0x35,R2
+(0118)     RAMPZ = 0x00;       //RAMPZ清零初始化 
+    0F0FA BE2B      OUT	0x3B,R2
+(0119)     asm("jmp 0x0000\n");//跳转到Flash的0x0000处，执行用户的应用程序 
+    0F0FB 940C 0000 JMP	0x0
+    0F0FD 9508      RET
+_timer3_ovf_isr:
+    0F0FE 922A      ST	-Y,R2
+    0F0FF 938A      ST	-Y,R24
+    0F100 B62F      IN	R2,0x3F
+    0F101 922A      ST	-Y,R2
+(0120) } 
+(0121) 
+(0122)  
+(0123)  
+(0124) 
+(0125) #pragma interrupt_handler timer3_ovf_isr:iv_TIM3_OVF
+(0126) void timer3_ovf_isr(void)
+(0127) { 
+(0128)   UpdateBegin=0;//回到待命状态
+    0F102 2422      CLR	R2
+    0F103 9220 0291 STS	UpdateBegin,R2
+(0129)   TCCR3B = 0x00; //stop  
+    0F105 9220 008A STS	0x8A,R2
+(0130)   ETIMSK &= 0xfb;//关定时器3中断
+    0F107 9180 007D LDS	R24,0x7D
+    0F109 7F8B      ANDI	R24,0xFB
+    0F10A 9380 007D STS	0x7D,R24
+(0131)   ETIFR|=0x04; //清定时器3中断标志 
+    0F10C 9180 007C LDS	R24,0x7C
+    0F10E 6084      ORI	R24,4
+    0F10F 9380 007C STS	0x7C,R24
+    0F111 9029      LD	R2,Y+
+    0F112 BE2F      OUT	0x3F,R2
+    0F113 9189      LD	R24,Y+
+    0F114 9029      LD	R2,Y+
+    0F115 9518      RETI
+(0132) }
+(0133) 
+(0134) 	
+(0135) 
+(0136) 
+(0137) void SendUart1(unsigned char c)   //串口发送数据
+(0138) {
+(0139)   while(!(UCSR1A&(1<<UDRE1)));   // 等待发送缓冲器为空
+_SendUart1:
+  c                    --> R16
+    0F116 9020 009B LDS	R2,0x9B
+    0F118 FE25      SBRS	R2,5
+    0F119 CFFC      RJMP	_SendUart1
+(0140)   UDR1=c;   // 将数据放入缓冲器，发送数据                 
+    0F11A 9300 009C STS	0x9C,R16
+    0F11C 9508      RET
+(0141) }
+(0142) 
+(0143) void SetTimer3_500ms(void)//页写开始后，如果有500ms时间内一个字节也没收到，则退出页写状态，回到待命状态
+(0144) {  
+(0145)     TCCR3B = 0x00; //stop    
+_SetTimer3_500ms:
+    0F11D 2422      CLR	R2
+    0F11E 9220 008A STS	0x8A,R2
+(0146)     TCNT3H = 0xF0; //8M,500ms
+    0F120 EF80      LDI	R24,0xF0
+    0F121 9380 0089 STS	0x89,R24
+(0147)     TCNT3L = 0xBE; //8M,500ms
+    0F123 EB8E      LDI	R24,0xBE
+    0F124 9380 0088 STS	0x88,R24
+(0148) 	ETIFR|=0x04; //清定时器3中断标志
+    0F126 9180 007C LDS	R24,0x7C
+    0F128 6084      ORI	R24,4
+    0F129 9380 007C STS	0x7C,R24
+(0149)  	TCCR3B = 0x05; //1024分频
+    0F12B E085      LDI	R24,5
+    0F12C 9380 008A STS	0x8A,R24
+(0150) 	ETIFR|=0x04; //清定时器3中断标志
+    0F12E 9180 007C LDS	R24,0x7C
+    0F130 6084      ORI	R24,4
+    0F131 9380 007C STS	0x7C,R24
+(0151) 	ETIMSK |= 0x04; //开定时器3中断
+    0F133 9180 007D LDS	R24,0x7D
+    0F135 6084      ORI	R24,4
+    0F136 9380 007D STS	0x7D,R24
+    0F138 9508      RET
+(0152) }
+(0153) 
+(0154) void SetTimer3_3s(void)
+(0155) {
+(0156) 	TCCR3B = 0x00; //stop    
+_SetTimer3_3s:
+    0F139 2422      CLR	R2
+    0F13A 9220 008A STS	0x8A,R2
+(0157) 	TCNT3H = 0xa4; ////8M,3s
+    0F13C EA84      LDI	R24,0xA4
+    0F13D 9380 0089 STS	0x89,R24
+(0158)     TCNT3L = 0x73; ////8M,3s
+    0F13F E783      LDI	R24,0x73
+    0F140 9380 0088 STS	0x88,R24
+(0159) 	ETIFR|=0x04; //清定时器3中断标志
+    0F142 9180 007C LDS	R24,0x7C
+    0F144 6084      ORI	R24,4
+    0F145 9380 007C STS	0x7C,R24
+(0160) 	ETIMSK &= 0xfb;//关定时器3中断
+    0F147 9180 007D LDS	R24,0x7D
+    0F149 7F8B      ANDI	R24,0xFB
+    0F14A 9380 007D STS	0x7D,R24
+(0161)  	TCCR3B = 0x05; //1024分频
+    0F14C E085      LDI	R24,5
+    0F14D 9380 008A STS	0x8A,R24
+(0162) 	ETIFR|=0x04; //清定时器3中断标志
+    0F14F 9180 007C LDS	R24,0x7C
+    0F151 6084      ORI	R24,4
+    0F152 9380 007C STS	0x7C,R24
+    0F154 9508      RET
+(0163) }
+(0164) 
+(0165) void main(void)
+(0166) {
+(0167)  	 unsigned int i,j,k;
+(0168) 	 unsigned char t; 	
+(0169) 	 
+(0170)      Delay30Ms();
+_main:
+  t                    --> Y,+1
+  k                    --> Y,+1
+  j                    --> Y,+1
+  i                    --> Y,+1
+    0F155 D10A      RCALL	_Delay30Ms
+(0171) 
+(0172) 	 uart1_init();
+    0F156 DF78      RCALL	_uart1_init
+(0173) 	 INT_EN
+    0F157 9478      BSET	7
+(0174) 
+(0175) 	 IntFlag=0;//无接收帧中断
+    0F158 2422      CLR	R2
+    0F159 9220 0292 STS	IntFlag,R2
+(0176)      UpdateBegin=0;//无标定系数下发
+    0F15B 9220 0291 STS	UpdateBegin,R2
+(0177) 	 
+(0178) 	SetTimer3_3s();	
+    0F15D DFDB      RCALL	_SetTimer3_3s
+(0179) 	
+(0180) 	     
+(0181) 	UpdateBegin=0;
+    0F15E 2422      CLR	R2
+    0F15F 9220 0291 STS	UpdateBegin,R2
+    0F161 C014      RJMP	0xF176
+(0182) 	
+(0183) 	while( ((ETIFR&0x04)==0x00) && (UpdateBegin==0) )
+(0184) 	{
+(0185) 		if((IntFlag==1))//3秒内收到开始更新命令
+    0F162 9180 0292 LDS	R24,IntFlag
+    0F164 3081      CPI	R24,1
+    0F165 F481      BNE	0xF176
+(0186) 		{  
+(0187) 		    IntFlag=0;
+    0F166 2422      CLR	R2
+    0F167 9220 0292 STS	IntFlag,R2
+(0188) 			if(R_dat==0xf5)//电机板握手
+    0F169 9180 0293 LDS	R24,R_dat
+    0F16B 9190 0294 LDS	R25,R_dat+1
+    0F16D 3F85      CPI	R24,0xF5
+    0F16E E0E0      LDI	R30,0
+    0F16F 079E      CPC	R25,R30
+    0F170 F429      BNE	0xF176
+(0189) 			{
+(0190) 			    UpdateBegin=1;
+    0F171 E081      LDI	R24,1
+    0F172 9380 0291 STS	UpdateBegin,R24
+(0191) 				SendUart1(0xf5);  
+    0F174 EF05      LDI	R16,0xF5
+    0F175 DFA0      RCALL	_SendUart1
+    0F176 9020 007C LDS	R2,0x7C
+    0F178 FC22      SBRC	R2,2
+    0F179 C004      RJMP	0xF17E
+    0F17A 9020 0291 LDS	R2,UpdateBegin
+    0F17C 2022      TST	R2
+    0F17D F321      BEQ	0xF162
+(0192) 			} 	
+(0193) 		}			
+(0194) 	} 
+(0195) 	
+(0196) 	TCCR3B = 0x00; //stop    
+    0F17E 2422      CLR	R2
+    0F17F 9220 008A STS	0x8A,R2
+(0197) 	ETIFR|=0x04; //清定时器3中断标志
+    0F181 9180 007C LDS	R24,0x7C
+    0F183 6084      ORI	R24,4
+    0F184 9380 007C STS	0x7C,R24
+(0198) 	ETIMSK &= 0xfb;//关定时器3中断
+    0F186 9180 007D LDS	R24,0x7D
+    0F188 7F8B      ANDI	R24,0xFB
+    0F189 9380 007D STS	0x7D,R24
+(0199) 	
+(0200) 	if(UpdateBegin==0)//3秒内没收到开始更新命令，则直接跳到主程序
+    0F18B 9020 0291 LDS	R2,UpdateBegin
+    0F18D 2022      TST	R2
+    0F18E F409      BNE	0xF190
+(0201) 	{
+(0202) 	 quit();
+    0F18F DF66      RCALL	_quit
+(0203) 	}
+(0204) 	
+(0205) 	UpdateBegin=0;
+    0F190 2422      CLR	R2
+    0F191 9220 0291 STS	UpdateBegin,R2
+    0F193 C0CA      RJMP	0xF25E
+(0206) 	
+(0207) 	while(1)
+(0208) 	{
+(0209)  	if(IntFlag==1)//接收到了正常命令帧
+    0F194 9180 0292 LDS	R24,IntFlag
+    0F196 3081      CPI	R24,1
+    0F197 F009      BEQ	0xF199
+    0F198 C0C5      RJMP	0xF25E
+(0210)    	{
+(0211) 	 	 if(UpdateBegin>0)//接收主程序二进制数据
+    0F199 E080      LDI	R24,0
+    0F19A 9020 0291 LDS	R2,UpdateBegin
+    0F19C 1582      CP	R24,R2
+    0F19D F008      BCS	0xF19F
+    0F19E C08F      RJMP	0xF22E
+(0212)      	 { 	  
+(0213) 		      SetTimer3_500ms();	 //每收到一字节就重新开始定时500ms，超时后回到待命状态
+    0F19F DF7D      RCALL	_SetTimer3_500ms
+(0214) 			  					   
+(0215) 		      flash_buf[DataReCn]=R_dat;
+    0F1A0 E086      LDI	R24,6
+    0F1A1 E091      LDI	R25,1
+    0F1A2 91E0 028F LDS	R30,DataReCn
+    0F1A4 91F0 0290 LDS	R31,DataReCn+1
+    0F1A6 0FE8      ADD	R30,R24
+    0F1A7 1FF9      ADC	R31,R25
+    0F1A8 9020 0293 LDS	R2,R_dat
+    0F1AA 9030 0294 LDS	R3,R_dat+1
+    0F1AC 8220      ST	Z,R2
+(0216) 			  DataReCn++;
+    0F1AD 9180 028F LDS	R24,DataReCn
+    0F1AF 9190 0290 LDS	R25,DataReCn+1
+    0F1B1 9601      ADIW	R24,1
+    0F1B2 9390 0290 STS	DataReCn+1,R25
+    0F1B4 9380 028F STS	DataReCn,R24
+(0217) 			   
+(0218) 			  
+(0219) 		 	 if(DataReCn==258)//2字节页索引，256字节页数据
+    0F1B6 3082      CPI	R24,2
+    0F1B7 E0E1      LDI	R30,1
+    0F1B8 079E      CPC	R25,R30
+    0F1B9 F009      BEQ	0xF1BB
+    0F1BA C0A0      RJMP	0xF25B
+(0220) 		   	 {
+(0221) 			   TCCR3B = 0x00; //stop  
+    0F1BB 2422      CLR	R2
+    0F1BC 9220 008A STS	0x8A,R2
+(0222)   			   ETIMSK &= 0xfb;//关定时器3中断
+    0F1BE 9180 007D LDS	R24,0x7D
+    0F1C0 7F8B      ANDI	R24,0xFB
+    0F1C1 9380 007D STS	0x7D,R24
+(0223)   			   ETIFR|=0x04; //清定时器3中断标志 
+    0F1C3 9180 007C LDS	R24,0x7C
+    0F1C5 6084      ORI	R24,4
+    0F1C6 9380 007C STS	0x7C,R24
+(0224)   			   		   
+(0225)   			   if(UpdateBegin==1)//如果是主控板页写准备了，则此时写入一页
+    0F1C8 9180 0291 LDS	R24,UpdateBegin
+    0F1CA 3081      CPI	R24,1
+    0F1CB F009      BEQ	0xF1CD
+    0F1CC C05D      RJMP	0xF22A
+(0226) 				{
+(0227)                   address=flash_buf[0]*256+flash_buf[1];  
+    0F1CD 9120 0106 LDS	R18,flash_buf
+    0F1CF 2733      CLR	R19
+    0F1D0 E000      LDI	R16,0
+    0F1D1 E011      LDI	R17,1
+    0F1D2 940E F279 CALL	empy16s
+    0F1D4 0118      MOVW	R2,R16
+    0F1D5 9040 0107 LDS	R4,flash_buf+1
+    0F1D7 2455      CLR	R5
+    0F1D8 0C24      ADD	R2,R4
+    0F1D9 1C35      ADC	R3,R5
+    0F1DA 2444      CLR	R4
+    0F1DB FC37      SBRC	R3,7
+    0F1DC 9440      COM	R4
+    0F1DD 2455      CLR	R5
+    0F1DE FC47      SBRC	R4,7
+    0F1DF 9450      COM	R5
+    0F1E0 9230 0101 STS	address+1,R3
+    0F1E2 9220 0100 STS	address,R2
+    0F1E4 9250 0103 STS	address+3,R5
+    0F1E6 9240 0102 STS	address+2,R4
+(0228) 			      address*=256;	 
+    0F1E8 E040      LDI	R20,0
+    0F1E9 E051      LDI	R21,1
+    0F1EA E060      LDI	R22,0
+    0F1EB E070      LDI	R23,0
+    0F1EC 925A      ST	-Y,R5
+    0F1ED 924A      ST	-Y,R4
+    0F1EE 923A      ST	-Y,R3
+    0F1EF 922A      ST	-Y,R2
+    0F1F0 018A      MOVW	R16,R20
+    0F1F1 019B      MOVW	R18,R22
+    0F1F2 940E F289 CALL	empy32s|empy32u
+    0F1F4 9310 0101 STS	address+1,R17
+    0F1F6 9300 0100 STS	address,R16
+    0F1F8 9330 0103 STS	address+3,R19
+    0F1FA 9320 0102 STS	address+2,R18
+(0229) 				  
+(0230) 			      if(address<0)
+    0F1FC E040      LDI	R20,0
+    0F1FD E050      LDI	R21,0
+    0F1FE E060      LDI	R22,0
+    0F1FF E070      LDI	R23,0
+    0F200 1704      CP	R16,R20
+    0F201 0715      CPC	R17,R21
+    0F202 0726      CPC	R18,R22
+    0F203 0737      CPC	R19,R23
+    0F204 F44C      BGE	0xF20E
+(0231) 			          address=0;
+    0F205 E080      LDI	R24,0
+    0F206 9380 0100 STS	address,R24
+    0F208 9380 0101 STS	address+1,R24
+    0F20A 9380 0102 STS	address+2,R24
+    0F20C 9380 0103 STS	address+3,R24
+(0232) 				 
+(0233) 			     if(address>0xff00)//对应页索引为255，这是最后一页能写的页，目前限制固件大小为64K字节
+    0F20E E040      LDI	R20,0
+    0F20F EF5F      LDI	R21,0xFF
+    0F210 E060      LDI	R22,0
+    0F211 E070      LDI	R23,0
+    0F212 9040 0102 LDS	R4,address+2
+    0F214 9050 0103 LDS	R5,address+3
+    0F216 9020 0100 LDS	R2,address
+    0F218 9030 0101 LDS	R3,address+1
+    0F21A 1542      CP	R20,R2
+    0F21B 0553      CPC	R21,R3
+    0F21C 0564      CPC	R22,R4
+    0F21D 0575      CPC	R23,R5
+    0F21E F454      BGE	0xF229
+(0234) 			         address=0xff00;
+    0F21F E080      LDI	R24,0
+    0F220 9380 0100 STS	address,R24
+    0F222 9380 0102 STS	address+2,R24
+    0F224 9380 0103 STS	address+3,R24
+    0F226 EF8F      LDI	R24,0xFF
+    0F227 9380 0101 STS	address+1,R24
+(0235) 				
+(0236) 		          write_one_page();	//约20ms    
+    0F229 DE6A      RCALL	_write_one_page
+(0237) 			    }   
+(0238) 				  
+(0239) 			   UpdateBegin=0;//一页写完了，下一页又从页写准备开始
+    0F22A 2422      CLR	R2
+    0F22B 9220 0291 STS	UpdateBegin,R2
+(0240) 			   //在此不用计算校验，主控板会去计算 
+(0241) 			 }	 	 
+(0242) 	     }
+    0F22D C02D      RJMP	0xF25B
+(0243)   		 else//若不是下发标定系数，则进入以下各个命令的子语句
+(0244) 		 {
+(0245)     		switch(R_dat)
+    0F22E 9020 0293 LDS	R2,R_dat
+    0F230 9030 0294 LDS	R3,R_dat+1
+    0F232 01C1      MOVW	R24,R2
+    0F233 3F84      CPI	R24,0xF4
+    0F234 E0E0      LDI	R30,0
+    0F235 079E      CPC	R25,R30
+    0F236 F0A1      BEQ	0xF24B
+    0F237 3F85      CPI	R24,0xF5
+    0F238 E0E0      LDI	R30,0
+    0F239 079E      CPC	R25,R30
+    0F23A F069      BEQ	0xF248
+    0F23B 3F84      CPI	R24,0xF4
+    0F23C E0E0      LDI	R30,0
+    0F23D 079E      CPC	R25,R30
+    0F23E F0E4      BLT	0xF25B
+    0F23F 9180 0293 LDS	R24,R_dat
+    0F241 9190 0294 LDS	R25,R_dat+1
+    0F243 3F8F      CPI	R24,0xFF
+    0F244 E0E0      LDI	R30,0
+    0F245 079E      CPC	R25,R30
+    0F246 F089      BEQ	0xF258
+    0F247 C013      RJMP	0xF25B
+(0246)      		{			
+(0247) 			   case 0xf5://电机板握手
+(0248) 			         SendUart1(0xf5); 
+    0F248 EF05      LDI	R16,0xF5
+    0F249 DECC      RCALL	_SendUart1
+(0249) 			   break;	   
+    0F24A C010      RJMP	0xF25B
+(0250) 				
+(0251) 				case 0xf4://电机板页写准备
+(0252) 					 SendUart1(0xf4); 
+    0F24B EF04      LDI	R16,0xF4
+    0F24C DEC9      RCALL	_SendUart1
+(0253) 					 UpdateBegin=1;//页写准备 
+    0F24D E081      LDI	R24,1
+    0F24E 9380 0291 STS	UpdateBegin,R24
+(0254) 					 DataReCn=0;
+    0F250 2422      CLR	R2
+    0F251 2433      CLR	R3
+    0F252 9230 0290 STS	DataReCn+1,R3
+    0F254 9220 028F STS	DataReCn,R2
+(0255) 				     SetTimer3_500ms();
+    0F256 DEC6      RCALL	_SetTimer3_500ms
+(0256) 				break;
+    0F257 C003      RJMP	0xF25B
+(0257) 	
+(0258) 				case 0xff://退出更新状态，运行正常程序
+(0259) 				 SendUart1(0xff); 	
+    0F258 EF0F      LDI	R16,0xFF
+    0F259 DEBC      RCALL	_SendUart1
+(0260) 				 quit();
+    0F25A DE9B      RCALL	_quit
+(0261) 				break;
+(0262) 
+(0263) 				default:
+(0264) 				break;
+(0265) 	  	    }//switch(R_dat&0xf0)
+(0266) 	     }//UpdateBegin
+(0267) 		 IntFlag=0;
+    0F25B 2422      CLR	R2
+    0F25C 9220 0292 STS	IntFlag,R2
+    0F25E CF35      RJMP	0xF194
+    0F25F 9508      RET
+(0268) 	 }//IntFlag
+(0269)     }//while(1)
+(0270)  
+(0271) }
+(0272) 
+(0273) 
+(0274) 
+(0275)  
+(0276) 
+(0277) void Delay30Ms(void)//8M主时钟频率，则最大定时7812.5ms
+(0278) {
+(0279) 	TCCR1B = 0x00; //stop
+_Delay30Ms:
+    0F260 2422      CLR	R2
+    0F261 BC2E      OUT	0x2E,R2
+(0280)     TCNT1 = 65301;//30ms  
+    0F262 E185      LDI	R24,0x15
+    0F263 EF9F      LDI	R25,0xFF
+    0F264 BD9D      OUT	0x2D,R25
+    0F265 BD8C      OUT	0x2C,R24
+(0281)  	TCCR1B = 0x05; //1024分频
+    0F266 E085      LDI	R24,5
+    0F267 BD8E      OUT	0x2E,R24
+(0282) 	TIFR|=0x04; //清定时器1中断标志
+    0F268 B786      IN	R24,0x36
+    0F269 6084      ORI	R24,4
+    0F26A BF86      OUT	0x36,R24
+(0283) 	while((TIFR&0x04)==0x00); 
+    0F26B B626      IN	R2,0x36
+    0F26C FE22      SBRS	R2,2
+    0F26D CFFD      RJMP	0xF26B
+(0284) 	TCCR1B = 0x00; //stop
+    0F26E 2422      CLR	R2
+    0F26F BC2E      OUT	0x2E,R2
+(0285) 	TIFR|=0x04; //清定时器1中断标志
+FILE: <library>
+    0F270 B786      IN	R24,0x36
+    0F271 6084      ORI	R24,4
+    0F272 BF86      OUT	0x36,R24
+    0F273 9508      RET
+push_arg4:
+    0F274 933A      ST	-Y,R19
+    0F275 932A      ST	-Y,R18
+push_arg2:
+    0F276 931A      ST	-Y,R17
+    0F277 930A      ST	-Y,R16
+    0F278 9508      RET
+empy16s:
+    0F279 920A      ST	-Y,R0
+    0F27A 921A      ST	-Y,R1
+    0F27B 938A      ST	-Y,R24
+    0F27C 939A      ST	-Y,R25
+    0F27D 9F02      MUL	R16,R18
+    0F27E 01C0      MOVW	R24,R0
+    0F27F 9F12      MUL	R17,R18
+    0F280 0D90      ADD	R25,R0
+    0F281 9F03      MUL	R16,R19
+    0F282 0D90      ADD	R25,R0
+    0F283 018C      MOVW	R16,R24
+    0F284 9199      LD	R25,Y+
+    0F285 9189      LD	R24,Y+
+    0F286 9019      LD	R1,Y+
+    0F287 9009      LD	R0,Y+
+    0F288 9508      RET
+empy32s|empy32u:
+    0F289 940E F2BD CALL	long_prolog
+    0F28B 927A      ST	-Y,R7
+    0F28C 940E F2D6 CALL	tstzero1
+    0F28E F159      BEQ	0xF2BA
+    0F28F 2477      CLR	R7
+    0F290 940E F2DC CALL	tstzero2
+    0F292 F419      BNE	0xF296
+    0F293 018C      MOVW	R16,R24
+    0F294 019D      MOVW	R18,R26
+    0F295 C024      RJMP	0xF2BA
+    0F296 920A      ST	-Y,R0
+    0F297 921A      ST	-Y,R1
+    0F298 9F08      MUL	R16,R24
+    0F299 2CB0      MOV	R11,R0
+    0F29A 2CA1      MOV	R10,R1
+    0F29B 9F28      MUL	R18,R24
+    0F29C 2C90      MOV	R9,R0
+    0F29D 2C81      MOV	R8,R1
+    0F29E 9F18      MUL	R17,R24
+    0F29F 0CA0      ADD	R10,R0
+    0F2A0 1C91      ADC	R9,R1
+    0F2A1 1C87      ADC	R8,R7
+    0F2A2 9F09      MUL	R16,R25
+    0F2A3 0CA0      ADD	R10,R0
+    0F2A4 1C91      ADC	R9,R1
+    0F2A5 1C87      ADC	R8,R7
+    0F2A6 9F19      MUL	R17,R25
+    0F2A7 0C90      ADD	R9,R0
+    0F2A8 1C81      ADC	R8,R1
+    0F2A9 9F0A      MUL	R16,R26
+    0F2AA 0C90      ADD	R9,R0
+    0F2AB 1C81      ADC	R8,R1
+    0F2AC 9F38      MUL	R19,R24
+    0F2AD 0C80      ADD	R8,R0
+    0F2AE 9F29      MUL	R18,R25
+    0F2AF 0C80      ADD	R8,R0
+    0F2B0 9F1A      MUL	R17,R26
+    0F2B1 0C80      ADD	R8,R0
+    0F2B2 9F0B      MUL	R16,R27
+    0F2B3 0C80      ADD	R8,R0
+    0F2B4 9019      LD	R1,Y+
+    0F2B5 9009      LD	R0,Y+
+    0F2B6 2D0B      MOV	R16,R11
+    0F2B7 2D1A      MOV	R17,R10
+    0F2B8 2D29      MOV	R18,R9
+    0F2B9 2D38      MOV	R19,R8
+    0F2BA 9079      LD	R7,Y+
+    0F2BB 940C F2CB JMP	long_epilog
+long_prolog:
+    0F2BD 928A      ST	-Y,R8
+    0F2BE 929A      ST	-Y,R9
+    0F2BF 92AA      ST	-Y,R10
+    0F2C0 92BA      ST	-Y,R11
+    0F2C1 93EA      ST	-Y,R30
+    0F2C2 938A      ST	-Y,R24
+    0F2C3 939A      ST	-Y,R25
+    0F2C4 93AA      ST	-Y,R26
+    0F2C5 93BA      ST	-Y,R27
+    0F2C6 8589      LDD	R24,Y+9
+    0F2C7 859A      LDD	R25,Y+10
+    0F2C8 85AB      LDD	R26,Y+11
+    0F2C9 85BC      LDD	R27,Y+12
+    0F2CA 9508      RET
+long_epilog:
+    0F2CB 91B9      LD	R27,Y+
+    0F2CC 91A9      LD	R26,Y+
+    0F2CD 9199      LD	R25,Y+
+    0F2CE 9189      LD	R24,Y+
+    0F2CF 91E9      LD	R30,Y+
+    0F2D0 90B9      LD	R11,Y+
+    0F2D1 90A9      LD	R10,Y+
+    0F2D2 9099      LD	R9,Y+
+    0F2D3 9089      LD	R8,Y+
+    0F2D4 9624      ADIW	R28,4
+    0F2D5 9508      RET
+tstzero1:
+    0F2D6 27EE      CLR	R30
+    0F2D7 2BE0      OR	R30,R16
+    0F2D8 2BE1      OR	R30,R17
+    0F2D9 2BE2      OR	R30,R18
+    0F2DA 2BE3      OR	R30,R19
+    0F2DB 9508      RET
+tstzero2:
+    0F2DC 27EE      CLR	R30
+    0F2DD 2BE8      OR	R30,R24
+    0F2DE 2BE9      OR	R30,R25
+    0F2DF 2BEA      OR	R30,R26
+    0F2E0 2BEB      OR	R30,R27
+    0F2E1 9508      RET
