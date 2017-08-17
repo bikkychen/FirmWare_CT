@@ -1,23 +1,23 @@
 ------------------------------  AD.PJT - Release  ------------------------------
-[DSP28_DefaultIsr.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_DefaultIsr.c"
+[DSP28_DefaultIsr.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_DefaultIsr.c"
 
-[DSP28_Ev.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_Ev.c"
+[DSP28_Ev.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_Ev.c"
 
-[DSP28_GlobalVariableDefs.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_GlobalVariableDefs.c"
+[DSP28_GlobalVariableDefs.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_GlobalVariableDefs.c"
 
-[DSP28_Gpio.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_Gpio.c"
+[DSP28_Gpio.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_Gpio.c"
 
-[DSP28_PieCtrl.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_PieCtrl.c"
+[DSP28_PieCtrl.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_PieCtrl.c"
 
-[DSP28_PieVect.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_PieVect.c"
+[DSP28_PieVect.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_PieVect.c"
 
-[DSP28_Sci.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_Sci.c"
+[DSP28_Sci.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_Sci.c"
 
-[DSP28_SysCtrl.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_SysCtrl.c"
+[DSP28_SysCtrl.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "DSP28_SysCtrl.c"
 
-[fir16.asm] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "fir16.asm"
+[fir16.asm] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "fir16.asm"
 
-[main.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/ADC/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "main.c"
+[main.c] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -q -fr"C:/CTCJ_DSP/Release" -d"LARGE_MODEL" -ml -v28 -@"Release.lkf" "main.c"
 
 [Linking...] "C:\CCStudio_v3.3\C2000\cgtools\bin\cl2000" -@"Release.lkf"
 <Linking>

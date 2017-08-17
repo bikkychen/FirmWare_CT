@@ -24,22 +24,24 @@
 //---------------------------------------------------------------------------
 // This function initializes the SPI(s) to a known state.
 //
+
 void InitSci(void)
 {
-	// Initialize SCI-A:
+
 	
 	EALLOW;
 	GpioMuxRegs.GPGMUX.bit.SCIRXDB_GPIOG5 =1;
 	GpioMuxRegs.GPGMUX.bit.SCITXDB_GPIOG4=1;
 	EDIS;
-	/* loopback   8 bit data */
+	// loopback   8 bit data 
 	ScibRegs.SCICCR.all = 0x07;	// 1 bit stop, disable parity, idle mode, 8 bits data 
 	
 	ScibRegs.SCICTL1.all = 0x03; // enable TX 
 	ScibRegs.SCICTL2.all = 0x03; //
 	
 	ScibRegs.SCIHBAUD = 0x00;
-	ScibRegs.SCILBAUD = 0x19;//    8000000/(25+1)/8=38400 
+//	ScibRegs.SCILBAUD = 0x19;//    8000000/(25+1)/8=38400 
+	ScibRegs.SCILBAUD = 0x10;//    8000000/(16+1)/8=58823 
 	
 	ScibRegs.SCICTL1.all = 0x23;
 	
@@ -53,12 +55,6 @@ void InitSci(void)
 	//tbd...
 }
 
-/********************************************************************************
-	name:	int SciaTx_Ready(void)
-	input:	none
-	output:	i	1:	ready
-			0:	busy
-*********************************************************************************/
 
 int ScibTx_Ready(void)
 {
@@ -94,9 +90,3 @@ int ScibRx_Ready(void)
 	}
 	return(i);
 }
-
-
-	
-//===========================================================================
-// No more.
-//===========================================================================

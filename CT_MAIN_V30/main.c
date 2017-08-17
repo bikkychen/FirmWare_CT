@@ -16,6 +16,7 @@ CTZK
 //20170703 版本从6.0起步，为了与前一阶段的硬件相区别
 //20170705 压力短节功能调通 V6.1
 //20170711  版本回退到V1.0，方便以后的功能扩展
+//20170817  升级版本到V1.1，增加了绝对时间差法流量计的功能支持
 **************************************************/
 #include <iom128v.h>								   	
 #include <macros.h>
@@ -23,7 +24,7 @@ CTZK
 
  
 #define Debug 0
-#define  BB     0x10       //固件版本号
+#define  BB     0x11       //固件版本号
 
 
 #define M1_L     {PORTG&=0xf7;}
@@ -1107,52 +1108,93 @@ void main(void)
 						  T_dat=TPS_TData;
 						  SendManchester();//温度2
 						}
-						else
+						else//采集流量板上的压力温度
 						{
-						Uart0TxData[0]=0xE8;
-						Uart0TxData[1]=0x40;
-						Uart0TxData[2]=0x89;
-						Uart0TxData[3]=9;
-						SendUart0_2(9,50);//流量板直读检测，超时400ms
+						  Uart0TxData[0]=0xE8;
+						  Uart0TxData[1]=0x40;
+						  Uart0TxData[2]=0x89;
+						  Uart0TxData[3]=9;
+						  SendUart0_2(9,50);//流量板直读检测，超时400ms
+						  
+						 if((Uart0RxCounter==16)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x0c)&&(Uart0RxData[2]==0x89))//绝对时间差法流量板，严格按帧格式返回16字节（含12字节有效数据）
+						 {
+						  T_dat=Uart0RxData[4];
+						  T_dat<<=8;
+						  T_dat|=Uart0RxData[3];
+						  SendManchester();//压力
 
-						T_dat=Uart0RxData[1];
-						T_dat<<=8;
-						T_dat|=Uart0RxData[0];
-						SendManchester();//压力
+						  Delay_ms(30);	
+						  T_dat=Uart0RxData[6];
+						  T_dat<<=8;
+						  T_dat|=Uart0RxData[5];
+						  SendManchester();//温度
+						 }
+						 else//常规流量板
+						 {
+						  T_dat=Uart0RxData[1];
+						  T_dat<<=8;
+						  T_dat|=Uart0RxData[0];
+						  SendManchester();//压力
 
-						Delay_ms(30);	
-						T_dat=Uart0RxData[3];
-						T_dat<<=8;
-						T_dat|=Uart0RxData[2];
-						SendManchester();//温度
+						  Delay_ms(30);	
+						  T_dat=Uart0RxData[3];
+						  T_dat<<=8;
+						  T_dat|=Uart0RxData[2];
+						  SendManchester();//温度
+						 }
 						}
 						
 						break;
 
 					case 0x50://流量采样	    	          	  	   	  	 
-						/*	
-						Delay_ms(40); //40ms定时		
-						myFIB.f=123.456; 
-						T_dat=myFIB.i[1];
-						SendManchester();
-						Delay_ms(40);
-						T_dat=myFIB.i[0];
-						SendManchester();
-						Delay_ms(40);
-						myFIB.f=789.012; 
-						T_dat=myFIB.i[1];
-						SendManchester();
-						Delay_ms(40);
-						T_dat=myFIB.i[0];
-						SendManchester();
-						Delay_ms(40);
-						*/
+
 						Uart0TxData[0]=0xE8;
 						Uart0TxData[1]=0x40;
 						Uart0TxData[2]=0x89;
 						Uart0TxData[3]=9;
 						SendUart0_2(9,50);//流量板直读检测，超时400ms
+						
+						if((Uart0RxCounter==16)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x0c)&&(Uart0RxData[2]==0x89))//绝对时间差法流量板，严格按帧格式返回16字节（含12字节有效数据）
+						{
+						//顺流时间，浮点数
+						myFIB.b[0]=Uart0RxData[7];
+						myFIB.b[1]=Uart0RxData[8];
+						myFIB.b[2]=Uart0RxData[9];
+						myFIB.b[3]=Uart0RxData[10];
+						 
+						T_dat=myFIB.i[1];
+						SendManchester();//顺流时间
+						crc16array[0]=(unsigned char)(T_dat);
+						crc16array[1]=(unsigned char)(T_dat>>8);
 
+						Delay_ms(30);	
+						T_dat=myFIB.i[0];
+						SendManchester();//顺流时间
+						crc16array[2]=(unsigned char)(T_dat);
+						crc16array[3]=(unsigned char)(T_dat>>8);
+
+						Delay_ms(30);	
+
+						//逆流时间，浮点数
+						myFIB.b[0]=Uart0RxData[11];
+						myFIB.b[1]=Uart0RxData[12];
+						myFIB.b[2]=Uart0RxData[13];
+						myFIB.b[3]=Uart0RxData[14];
+
+						T_dat=myFIB.i[1];
+						SendManchester();//逆流时间
+						crc16array[4]=(unsigned char)(T_dat);
+						crc16array[5]=(unsigned char)(T_dat>>8);
+
+
+						Delay_ms(30);	
+						T_dat=myFIB.i[0];
+						SendManchester();//逆流时间
+						crc16array[6]=(unsigned char)(T_dat);
+						crc16array[7]=(unsigned char)(T_dat>>8);
+						}
+						else // 常规流量采样
+						{
 						lfib=Uart0RxData[5];
 						lfib<<=8;
 						lfib|=Uart0RxData[4];
@@ -1189,6 +1231,7 @@ void main(void)
 						SendManchester();//流量-相位2
 						crc16array[6]=(unsigned char)(T_dat);
 						crc16array[7]=(unsigned char)(T_dat>>8);
+						}
 
 						Delay_ms(30);	
 						crc16(crc16array,8);//0.75ms
@@ -1539,31 +1582,42 @@ void main(void)
 								}
 							}		
 						}
-						/*   if(R_dat==0xb1)//读幅值
+						else if(R_dat==0xb2)//读参数，包括顺、逆幅和顺、逆阈值，暂只考虑上流量计，共8字节
 						{
-						SendUart0(0xb0,5);//40ms定时
-						for(k=0;k<8;k+=2)
-						{
-						T_dat=Uart0RxData[k];
-						T_dat<<=8;
-						T_dat|=Uart0RxData[k+1];
-						SendManchester();
-						Delay_ms(40);
+						    Uart0TxData[0]=0xE8;
+							Uart0TxData[1]=0x40;
+							Uart0TxData[2]=0xb2;
+							SendUart0_2(9,5);// 超时40ms	
+							for(k=0;k<8;k+=2)
+							{
+							T_dat=Uart0RxData[k];
+							T_dat<<=8;
+							T_dat|=Uart0RxData[k+1];
+							SendManchester();
+							Delay_ms(40);
+							}
 						}
-						}
-						else  if((R_dat>0xb0) && (R_dat<0xb5) )//1800点提取,连续提取流量测试数据，4个通道分别提取，命令为0xB1-0xB4
+						else  if(R_dat>0xbb)//1800点提取,连续提取流量测试数据，4个通道分别提取，命令为0xBC-0xBF
 						{   
-						SendUart0(R_dat,125);//1s定时	 
-						for(k=0;k<1800;k++)//共1800帧数据，全部提取
-						{
-						SendUart0(0xFF,1);//8ms定时	   
-						T_dat=Uart0RxData[0];
-						T_dat<<=8;
-						T_dat|=Uart0RxData[1];
-						SendManchester();
-						Delay_ms(42);
-						}
-						} */  
+							Uart0TxData[0]=0xE8;
+							Uart0TxData[1]=0x40;
+							Uart0TxData[2]=R_dat;
+							SendUart0_2(9,125);// 超时1秒
+							if((Uart0RxCounter==4)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x00)&&(Uart0RxData[2]==R_dat))//流量采样完毕并正确响应了
+							{
+							 for(k=0;k<1800;k++)//共1800帧数据，全部提取
+							 {
+							  Uart0TxData[0]=0xE8;
+							  Uart0TxData[1]=0x40;
+							  Uart0TxData[2]=0xbb;//连续提取波形命令
+							  SendUart0_2(9,4);// 超时32ms 
+							  T_dat=Uart0RxData[1];//应该返回2字节有效数据
+							  T_dat<<=8;
+							  T_dat|=Uart0RxData[0];
+							  SendManchester();
+							 }
+						   }
+						} 
 						break;
 
 					case 0xc0://所有参数全采，上传16字节共8帧
@@ -1576,6 +1630,66 @@ void main(void)
 							SendUart0_2(9,50);//流量板直读检测，超时400ms
 							//if(Uart0RxCounter==64)//成功接收到压力、温度、流量数据，先低字节后高字节
 							{
+								
+								if((Uart0RxCounter==16)&&(Uart0RxData[0]==0x55)&&(Uart0RxData[1]==0x0c)&&(Uart0RxData[2]==0x89))//绝对时间差法流量板，严格按帧格式返回16字节（含12字节有效数据）
+								{
+								T_dat=Uart0RxData[4];
+								T_dat<<=8;
+								T_dat|=Uart0RxData[3];
+								SendManchester();//压力
+								crc16array[0]=(unsigned char)(T_dat);
+								crc16array[1]=(unsigned char)(T_dat>>8);
+
+
+								Delay_ms(30);	
+								T_dat=Uart0RxData[6];
+								T_dat<<=8;
+								T_dat|=Uart0RxData[5];
+								SendManchester();//温度
+								crc16array[2]=(unsigned char)(T_dat);
+								crc16array[3]=(unsigned char)(T_dat>>8);
+
+								Delay_ms(30);	 
+								
+								//顺流时间，浮点数
+								myFIB.b[0]=Uart0RxData[7];
+								myFIB.b[1]=Uart0RxData[8];
+								myFIB.b[2]=Uart0RxData[9];
+								myFIB.b[3]=Uart0RxData[10];
+						 
+						        T_dat=myFIB.i[1];
+						        SendManchester();//顺流时间
+								crc16array[4]=(unsigned char)(T_dat);
+								crc16array[5]=(unsigned char)(T_dat>>8);
+
+								Delay_ms(30);	
+								T_dat=myFIB.i[0];
+								SendManchester();//顺流时间
+								crc16array[6]=(unsigned char)(T_dat);
+								crc16array[7]=(unsigned char)(T_dat>>8);
+
+								Delay_ms(30);	
+
+								//逆流时间，浮点数
+								myFIB.b[0]=Uart0RxData[11];
+								myFIB.b[1]=Uart0RxData[12];
+								myFIB.b[2]=Uart0RxData[13];
+								myFIB.b[3]=Uart0RxData[14];
+
+								T_dat=myFIB.i[1];
+								SendManchester();//逆流时间
+								crc16array[8]=(unsigned char)(T_dat);
+								crc16array[9]=(unsigned char)(T_dat>>8);
+
+
+								Delay_ms(30);	
+								T_dat=myFIB.i[0];
+								SendManchester();//逆流时间
+								crc16array[10]=(unsigned char)(T_dat);
+								crc16array[11]=(unsigned char)(T_dat>>8);
+								}
+						       else//常规流量计
+							    {
 								T_dat=Uart0RxData[1];
 								T_dat<<=8;
 								T_dat|=Uart0RxData[0];
@@ -1593,7 +1707,7 @@ void main(void)
 								crc16array[3]=(unsigned char)(T_dat>>8);
 
 								Delay_ms(30);	
-
+								
 								lfib=Uart0RxData[5];
 								lfib<<=8;
 								lfib|=Uart0RxData[4];
@@ -1629,6 +1743,7 @@ void main(void)
 								SendManchester();//流量-相位2
 								crc16array[10]=(unsigned char)(T_dat);
 								crc16array[11]=(unsigned char)(T_dat>>8);
+								}
 
 								 
 								SendUart1(0x81,4);//电机状态，32ms超时

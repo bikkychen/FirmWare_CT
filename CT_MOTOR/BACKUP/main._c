@@ -5,8 +5,9 @@
 
  //20170703
  //适应新做的电机板,R2改为30K
- 
-#define  BB     0x10        //固件版本号
+ //20170716  开电机电源时要关模拟比较器中断（后级电容充电时约20ms，把总线电压下拉到约40V左右，正好是欠压中断的门槛），老主控板因为欠压门槛是28V，所以没事，老电机控制小板没事的原因暂不知，可能是后级电容充电比较慢。
+ //20170719 电机断路档位最小为5mA，步进为10mA
+#define  BB     0x12        //固件版本号
 
 #define INT_EN		{ SEI(); }
 #define INT_DIS		{ CLI(); }
@@ -31,8 +32,9 @@
 #define MT2_N2_Clr()     (PORTA &= ~(1<<PORTA3)) 
 
 
-//电机电源
-#define VM_Open()        (PORTA |= (1<<PORTA6))
+//开电机电源，先关模拟比较器中断，再开电机电源 ，再延时50ms(实际上开电源只需要20ms)，再清模拟比较器中断，再开模拟比较器中断
+#define VM_OPEN        {ACSR&=0xf7;PORTA |= (1<<PORTA6);CheckMotor(50);ACSR|=0x10;ACSR|=0x08;}
+//关电机电源
 #define VM_Close()       (PORTA &= ~(1<<PORTA6)) 
 
 //同时关二个电机
@@ -489,8 +491,8 @@ void Gear2Thr(void)
   
   if(MotorIdelGear<1){MotorIdelGear=1;}//电机断路电流最小1档
   if(MotorIdelGear>6){MotorIdelGear=6;}//电机断路电流最大6档
-  //从10mA起步，最大60mA
-  MotorIdelCur=(MotorIdelGear-1)*11+10;
+  //从5mA起步，最大55mA
+  MotorIdelCur=(MotorIdelGear-1)*11+4;
   
 }
 
@@ -532,9 +534,9 @@ void main(void)
 						f=SampleADC(2);
 						f=f*0.34333;//按内部参考2.56V，8位AD采样，分压电阻分别是1M和30K来计算					
 						i=f;
-						 if( (Motor1Status.s.RUN==1) || (Motor1Status.s.RUN==1) )
+						 if( (Motor1Status.s.RUN==1) || (Motor2Status.s.RUN==1) )
 						 {
-						  i+=5;//为了用户看起来好看些
+						  i+=3;//为了用户看起来好看些
 						 }
 						SendUart1(i);   
 						break;
@@ -594,7 +596,7 @@ void main(void)
 								return;//20170609
 							}
 
-							VM_Open();//开电机电源
+							VM_OPEN//开电机电源
 
 							CheckMotor(500);//开电机电源后需等待半秒让大功率二极管电压稳定
 
@@ -673,7 +675,7 @@ void main(void)
 								return;//20170609
 							}
 
-							VM_Open();//开电机电源
+							VM_OPEN//开电机电源
 
 							CheckMotor(500);//开电机电源后需等待半秒让大功率二极管电压稳定
 
@@ -718,7 +720,7 @@ void main(void)
 					case 0x80://电机相关
 						if(R_dat==0x80)//只开电机电源，不开电机
 						{        	  						 
-							VM_Open();//开电机电源
+							VM_OPEN//开电机电源
 						    SendUart1(0); 
 						}	  
 						else if(R_dat==0x81)//获取电机状态	

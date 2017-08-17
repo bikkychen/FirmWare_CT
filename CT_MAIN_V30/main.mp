@@ -12,7 +12,7 @@ Area                               Addr   Size   Decimal Bytes (Attributes)
 
 Area                               Addr   Size   Decimal Bytes (Attributes)
 --------------------------------   ----   ----   ------- ----- ------------
-                            text   009C   3ED6 =  16086. bytes (rel,con,rom)
+                            text   009C   4460 =  17504. bytes (rel,con,rom)
 
        Addr  Global Symbol
       -----  --------------------------------
@@ -37,47 +37,47 @@ Area                               Addr   Size   Decimal Bytes (Attributes)
        05F4  _Delay_ms
        063A  _Start
        065A  _main
-       18C1  _SendManchester
-       1CFA  _EEPROM_write
-       1D02  _EEPROM_read
-       1D09  _crc16
-       1D5C  push_arg4
-       1D5E  push_arg2
-       1D61  asr16
-       1D68  elpm32
-       1D7C  pop_xgsetF0FC
-       1D87  push_xgsetF0FC
-       1D89  push_xgset30FC
-       1D8B  push_xgset00FC
-       1D8D  push_xgset003C
-       1D92  push_xgsetF00C
-       1D99  pop_xgsetF00C
-       1DA0  push_xgsetF03C
-       1DA9  pop_xgsetF03C
-       1DB2  neg32
-       1DBB  lsl32
-       1DC7  lsl8
-       1DCD  lsr16
-       1DD4  lsr32
-       1DE0  fpint
-       1E12  uint2fp
-       1E14  int2fp
-       1E1D  ulong2fp
-       1E1F  long2fp
-       1E36  fpdiv1
-       1E3F  fpdiv2
-       1E49  fpdiv1x
-       1E55  fpdiv2x
-       1ED0  unpacks
-       1ED8  tstR16_R19
-       1EE0  unpacku
-       1EF9  normalize_and_pack
-       1F2E  pack
-       1F3E  saveFPRegs
-       1F4D  restoreFPRegs
-       1F5C  fpmule
-       1FAF  fpmule1
-       1FB9  __text_end
+       1B86  _SendManchester
+       1FBF  _EEPROM_write
+       1FC7  _EEPROM_read
+       1FCE  _crc16
+       2021  push_arg4
+       2023  push_arg2
+       2026  asr16
+       202D  elpm32
+       2041  pop_xgsetF0FC
+       204C  push_xgsetF0FC
+       204E  push_xgset30FC
+       2050  push_xgset00FC
+       2052  push_xgset003C
+       2057  push_xgsetF00C
+       205E  pop_xgsetF00C
+       2065  push_xgsetF03C
+       206E  pop_xgsetF03C
+       2077  neg32
+       2080  lsl32
+       208C  lsl8
+       2092  lsr16
+       2099  lsr32
+       20A5  fpint
+       20D7  uint2fp
+       20D9  int2fp
+       20E2  ulong2fp
+       20E4  long2fp
+       20FB  fpdiv1
+       2104  fpdiv2
+       210E  fpdiv1x
+       211A  fpdiv2x
+       2195  unpacks
+       219D  tstR16_R19
+       21A5  unpacku
+       21BE  normalize_and_pack
+       21F3  pack
+       2203  saveFPRegs
+       2212  restoreFPRegs
+       2221  fpmule
+       2274  fpmule1
+       227E  __text_end
 
 Area                               Addr   Size   Decimal Bytes (Attributes)
 --------------------------------   ----   ----   ------- ----- ------------

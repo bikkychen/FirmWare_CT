@@ -3,19 +3,19 @@ MEMORY
 {
 PAGE 0 : 
    OTP         : origin = 0x3D7800, length = 0x000800
-   FLASHJ      : origin = 0x3D8000, length = 0x002000
-   FLASHI      : origin = 0x3DA000, length = 0x002000 
+   FLASHJ      : origin = 0x3D8000, length = 0x002000/*油管压力系数*/
+   FLASHI      : origin = 0x3DA000, length = 0x002000/*地层压力系数*/
 
-   FLASHH      : origin = 0x3DC000, length = 0x004000	   
-   FLASHG      : origin = 0x3E0000, length = 0x004000
+   FLASHH      : origin = 0x3DC000, length = 0x004000/*油管压力标定数据*/	   
+   FLASHG      : origin = 0x3E0000, length = 0x004000/*地层压力标定数据*/
    														 
    FLASHF      : origin = 0x3E4000, length = 0x004000
 
-   FLASHE      : origin = 0x3E8002, length = 0x003FFE 
-   FLASHD      : origin = 0x3EC000, length = 0x004000
+   FLASHE      : origin = 0x3E8002, length = 0x003FFE/*固件区1*/ 
+   FLASHD      : origin = 0x3EC000, length = 0x004000/*固件区2*/ 
 
    FLASHC      : origin = 0x3F0000, length = 0x004000
-   FLASHB      : origin = 0x3F4000, length = 0x002000 
+   FLASHB      : origin = 0x3F4000, length = 0x002000/*流量系数*/ 
    FLASHA      : origin = 0x3F6000, length = 0x001FF6   
    
    BEGIN       : origin = 0x3E8000, length = 0x000002
@@ -107,6 +107,13 @@ SECTIONS
 					RUN_START(_secureRamFuncs_runstart),
 					LOAD_START(_secureRamFuncs_loadstart),
 					LOAD_END(_secureRamFuncs_loadend)
+
+
+	delayusFuncs:   LOAD = FLASHE, PAGE = 0
+					RUN = RAML0L1, PAGE = 1
+					RUN_START(_delayusFuncs_runstart),
+					LOAD_START(_delayusFuncs_loadstart),
+					LOAD_END(_delayusFuncs_loadend)
 
 	AbsTimeFuncs:   LOAD = FLASHE, PAGE = 0
 					RUN = RAML0L1, PAGE = 1

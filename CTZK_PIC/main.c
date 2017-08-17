@@ -13,12 +13,13 @@ CTZK
 //20170703 全采时总线电压稍作处理，有电机运行时上传真实电压+5V，没有电机运行时上传0
 //20170704 总线电压采样时马笼头电压+2，电机电压+2，电机断路档位以10mA为台阶上跳
 //20170706 微调每档均多加1秒，方便上位机查看电机电流 V4.9
+//20170722 断路档位稍改
 **************************************************/
 #include <iom128v.h>								   	
 #include <macros.h>
 #include <stdio.h>
 
-#define  BB     0x49        //固件版本号
+#define  BB     0x50        //固件版本号
 
 #define M1_L    PORTD&=0xfb;
 #define M1_H    PORTD|=0x04;
@@ -515,8 +516,8 @@ void Gear2Thr(void)
   
   if(MotorIdelGear<1){MotorIdelGear=1;}//电机断路电流最小1档
   if(MotorIdelGear>6){MotorIdelGear=6;}//电机断路电流最大6档
-  //从10mA起步，最大60mA
-  MotorIdelCur=(MotorIdelGear-1)*8+8;
+  //从5mA起步，最大55mA
+  MotorIdelCur=(MotorIdelGear-1)*8+4;
   
 }
 

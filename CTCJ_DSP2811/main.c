@@ -1,37 +1,17 @@
 #include "DSP28_Device.h"
 #include "fft.h"
-#include "fir.h"
 #include "Flash281x_API_Library.h"
 #include <math.h>
 
-//V5.0更新要点
-//更改各口线定义
-//根据压力温度采样口线的变动，更改相关软件部分
-//增加读写换能器厂内幅值的功能
-//增加一键校准换能器幅值的功能
-//优化换能器首波查找算法
-//主循环中不时初始化压力温度采集的ADC，防该芯片死机
-
-
-// FLASHB：换能器首波阈值 
+// FLASHB：换能器首波阈值
 // FLASHI：压力温度标定系数
 // FLASHJ：压力温度标定数据
-
-//20151216:删除一键校准换能器幅值的功能,删除上电提取幅值的功能
-
-//20160728:缩短上电等待时间，解决连续读幅值时幅值不稳的问题，优化一健校准首波阈值的算法
-
-//20161102   
-//1、换能器幅值调整到极值后不再增减
-//2、上电时调整一次换能器幅值和阈值，并存盘
-//3、每16次流量采样后进行阈值调整判断，当幅值大于1000mV且顺逆时间差大于500ns时，进行一次阈值调整，但不存盘
-//4、上电后进行幅值和阈值调整后再开总中断
 
 #define NNH     {asm(" RPT #21 || NOP");}
 #define NNL     {asm(" RPT #21 || NOP");}
 
 //LM2941线性电源关断控制宏定义
-//#define N2_EN     GpioDataRegs.GPBDAT.bit.GPIOB1	 
+//#define N2_EN     GpioDataRegs.GPBDAT.bit.GPIOB1
 
 #define PI  3.1415926535897
 
@@ -41,10 +21,10 @@
 #define N 256
 #pragma DATA_SECTION(ipcb, "FFTipcb");
 #pragma DATA_SECTION(mag, "FFTmag");
-RFFT32  fft=RFFT32_256P_DEFAULTS;   
+RFFT32  fft=RFFT32_256P_DEFAULTS;
 long ipcb[N+2];
-long mag[N/2+1];  
-const long win[N/2]=HAMMING256; 
+long mag[N/2+1];
+const long win[N/2]=HAMMING256;
 
 long ADSData,tdv,pdv,pdo,addpt;
 
@@ -69,7 +49,7 @@ unsigned long  Delv;//幅值差
 Uint16  Delv1,Delv2,Delv3,Delv4;
 unsigned char Maxcount1[4],Maxcount2[4],Maxcount3[4],Maxcount4[4];
 unsigned char tp1[4],tp2[4],tp3[4],tp4[4];
-unsigned long Max,Max1,Max2,Min,Min1,Min2;//幅值最大/小值  
+unsigned long Max,Max1,Max2,Min,Min1,Min2;//幅值最大/小值
 long Maxx;			//连续波峰/谷之间的差值
 char Fpar;			//第三个波峰的查找方法
 float  t;			//单次传播的绝对时间
@@ -105,7 +85,7 @@ typedef union RR
 
 union RR RD[4];
 union RR RDa[4];
-float t1,t2,t3,t4;//上,下流量计的顺,逆流绝对时间 
+float t1,t2,t3,t4;//上,下流量计的顺,逆流绝对时间
 char DataReqFlag,DataReqCount,RanReqFlag;//采样波形，换能器幅值
 char ResetReqFlag;
 char VerFlag,CalFlag;
@@ -125,6 +105,18 @@ char q1,q2,q3;
 float df[4][10];
 char SC[4];
 unsigned char start_ss,start_sn,start_xs,start_xn;
+
+enum FrameStateEnum {IDEL, HEAD, FRAMELEN, CMD, INDEX, ADDR1, ADDR2, ADDR3, ADDR4, CHECK1,DATA,CHECK2,OK }FrameState;
+struct FrameStruc
+    {
+        unsigned char head, framelen, cmd, index,addr1,addr2,addr3,addr4,  check1, check2;
+        unsigned char  lentem;
+        unsigned char  databuf[64];
+    }RxFrameData;
+
+unsigned char SendDataBuf[16];
+ 
+
 
 void Sample(void);//函数内包括AbsTime()和FIR()函数，即计算出绝对时间并将其FIR滤波
 unsigned char AbsTime(unsigned char ch);//计算上下流量的绝对时间
@@ -146,83 +138,79 @@ void ISRSciCom0B(void);
 unsigned char CalThr(void);
 void CalP(void);//调整换能器幅值
 
+void delayus(unsigned int t);
+extern int ScibTx_Ready(void);
+void SendFrameData(unsigned char com);
+void CommandInterpretation(void);
+void StreamDataInterpretation_B(unsigned char b);
 #if RELEASE
 extern unsigned char secureRamFuncs_loadstart;
 extern unsigned char secureRamFuncs_loadend;
 extern unsigned char secureRamFuncs_runstart;
+
+extern unsigned char delayusFuncs_loadstart;
+extern unsigned char delayusFuncs_loadend;
+extern unsigned char delayusFuncs_runstart;
+
 extern unsigned char AbsTimeFuncs_loadstart;
 extern unsigned char AbsTimeFuncs_loadend;
 extern unsigned char AbsTimeFuncs_runstart;
 #endif
 
+
 void main(void)
-{  
+{
 	unsigned char i;
 
 	 HaltFlag=0;
 
 	DINT;//DINT   asm(" setc INTM")
 
-	DelaymS(7); 
+	DelaymS(7);
 	//DSP时钟倍频
-	InitSysCtrl(); 
-    DelaymS(7); 
+	InitSysCtrl();
+    DelaymS(7);
 
 
 	//上电约1秒后再给运放和模拟开关上电
     InitGpio();
 	InitEv();
-    
-	
-	InitPieCtrl(); 
+
+
+	InitPieCtrl();
 	InitPieVectTable();
 	IER = 0x0000;
 	IFR = 0x0000;
     XintfRegs.XINTCNF2.bit.CLKOFF = 1;   // DISABLE XCLKOUT
-    
+
 	InitEv();
 
-    
+
 
 #if RELEASE
 	memcpy(&secureRamFuncs_runstart,
 	&secureRamFuncs_loadstart,
 	&secureRamFuncs_loadend - &secureRamFuncs_loadstart);
 	InitFlash();
+
+	memcpy(&delayusFuncs_runstart,
+	&delayusFuncs_loadstart,
+	&delayusFuncs_loadend - &delayusFuncs_loadstart);
+
 	memcpy(&AbsTimeFuncs_runstart,
 	&AbsTimeFuncs_loadstart,
-	&AbsTimeFuncs_loadend - &AbsTimeFuncs_loadstart); 
+	&AbsTimeFuncs_loadend - &AbsTimeFuncs_loadstart);
+
 	memcpy(&Flash28_API_RunStart,
 	&Flash28_API_LoadStart,
-	&Flash28_API_LoadEnd - &Flash28_API_LoadStart); 
-#endif	
-
-   ApiVersion=Flash_APIVersion();
-   Flash_CPUScaleFactor = SCALE_FACTOR;
-   Flash_CallbackPtr = NULL;
-
-   tp[0]=*(Uint16 *)(0x3F4000);//FLASHB      : origin = 0x3F4000, length = 0x002000
-   tp[1]=*(Uint16 *)(0x3F4001);//FLASHB      : origin = 0x3F4000, length = 0x002000
-   tp[2]=*(Uint16 *)(0x3F4002);//FLASHB      : origin = 0x3F4000, length = 0x002000
-   tp[3]=*(Uint16 *)(0x3F4003);//FLASHB      : origin = 0x3F4000, length = 0x002000
-/*
-   tp[4]=*(Uint16 *)(0x3F4004);
-   tp[5]=*(Uint16 *)(0x3F4005);
-   tp[6]=*(Uint16 *)(0x3F4006);
-   tp[7]=*(Uint16 *)(0x3F4007);
-   */
-
-   Flash_Ptr = (Uint16 *)0x003D8000;//FLASHJ=0x3D8000~0x3D9FFF, 共 0x2000 Words = 4096 点
-   for(i=0;i<0x1000;i++)
-     {
-       if((*Flash_Ptr)==(0xffff)) 
-	       break;
-	   else
-	     Flash_Ptr+=2;
-	 }
+	&Flash28_API_LoadEnd - &Flash28_API_LoadStart);
+#endif
 
 
-	InitSci();  	   
+
+
+    FrameState = IDEL;
+	InitSci();
     DINT;
 	/*设置中断服务程序入口地址*/
 	EALLOW;	// This is needed to write to EALLOW protected registers
@@ -231,27 +219,20 @@ void main(void)
 	EDIS;   // This is needed to disable write to EALLOW protected registers
 
 
-
     DelaymS(300);//在此再延时1s,总计上电2秒后开12V电源，给主控板发低功耗命令的时间
-
-    if(HaltFlag)
-        EN=1;   //关12V电源
-	else
-	    EN=0;   //开12V电源
-
 	InitAdc();
 
     //FFT模块初始化
  	fft.ipcbptr=ipcb;
-	fft.magptr=mag;  
+	fft.magptr=mag;
 	fft.winptr=(long *)win;
-	fft.init(&fft); 
+	fft.init(&fft);
 
-    
-	 FlowBegin = 0;
+
+	 FlowBegin = 1;//上电即开始采样流量
 	 StopFlag=0;
 	 FlowReq=0;
-	 DataReqFlag=0;
+	 DataReqFlag=0;//没有波形请求
 	 RanReqFlag=0;
 	 ResetReqFlag=0;
 	 VerFlag=0;
@@ -262,7 +243,7 @@ void main(void)
     SC[0]=0;SC[1]=0;SC[2]=0;SC[3]=0;
 	DTC[0]=0;DTC[1]=0;DTC[2]=0;DTC[3]=0;
 	for(i=0;i<10;i++)
-	  {df[0][i]=0;df[1][i]=0;df[2][i]=0;df[3][i]=0;}	
+	  {df[0][i]=0;df[1][i]=0;df[2][i]=0;df[3][i]=0;}
 
 	RDa[0].f=0.0;	RDa[1].f=0.0;	RDa[2].f=0.0;	RDa[3].f=0.0;
 
@@ -272,59 +253,80 @@ void main(void)
     start_xn=0;
 
     ADS1222_INIT();
-	ADS1222_sample(1);pd=ADSData;	
+	ADS1222_sample(1);pd=ADSData;
 	ADS1222_sample(0);td=ADSData;
-	
+
 	EN=0;//开12V电源
-	
+
 	DelaymS(100);
 
+   ApiVersion=Flash_APIVersion();
+   Flash_CPUScaleFactor = SCALE_FACTOR;
+   Flash_CallbackPtr = NULL;
+
+   //提取换能器首波阈值
+   tp[0]=*(Uint16 *)(0x3F4000);//FLASHB      : origin = 0x3F4000, length = 0x002000
+   tp[1]=*(Uint16 *)(0x3F4001);//FLASHB      : origin = 0x3F4000, length = 0x002000
+   tp[2]=*(Uint16 *)(0x3F4002);//FLASHB      : origin = 0x3F4000, length = 0x002000
+   tp[3]=*(Uint16 *)(0x3F4003);//FLASHB      : origin = 0x3F4000, length = 0x002000
+
+   //上电时调整一次换能器首波阈值并存盘
 	Delv1=(MAXP+MINP)/2;
 	Delv2=Delv1;
 	Delv3=Delv1;
 	Delv4=Delv1;
-
-
-	 CalP();//调整换能器幅值
-	 if( ((Delv1>1365)&&(Delv2>1365)&&(abs(RDa[0].f-RDa[1].f)>500)) || ((Delv3>1365)&&(Delv4>1365)&&(abs(RDa[2].f-RDa[3].f)>500)) )
+	CalP();//调整换能器幅值
+	if( ((Delv1>1365)&&(Delv2>1365)&&(abs(RDa[0].f-RDa[1].f)>500)) || ((Delv3>1365)&&(Delv4>1365)&&(abs(RDa[2].f-RDa[3].f)>500)) )
 		{
 		  CalThr();
 		}
-	Status = Flash_Erase(SECTORB,&EraseStatus); //常温下示波器测试耗时约1.3s,datasheet上说4片8K的FLASH擦除耗时共10s，则每片耗时2.5s			   
-	Status = Flash_Program((Uint16 *)(0x3F4000),tp,4,&ProgStatus);	
+	Status = Flash_Erase(SECTORB,&EraseStatus); //常温下示波器测试耗时约1.3s,datasheet上说4片8K的FLASH擦除耗时共10s，则每片耗时2.5s
+	Status = Flash_Program((Uint16 *)(0x3F4000),tp,4,&ProgStatus);
 
-		/*开中断*/
+
 	IER |= M_INT9;
 	EINT;   // Enable Global interrupt INTM
 	ERTM;	// Enable Global realtime interrupt DBGM
 
-	while(1) 
-    { 
+
+	HaltFlag=0;
+	while(1)
+    {
 
   	 if(HaltFlag)//降低流量板功耗
-   	 {	  
+   	 {
 	      EN=1;//关12V电源		  DelaymS(10);
 		  EALLOW;
 		  DINT;//关中断
 		  AdcRegs.ADCTRL1.bit.RESET=1;//ADC模块复位
 		  SysCtrlRegs.PCLKCR.bit.SCIENCLKB=0;
 		  SysCtrlRegs.PCLKCR.bit.ADCENCLK=0;
-		  EDIS;		 
-		   	  
+		  EDIS;
+
+		  //找到压力标定数据的起始点
+		   Flash_Ptr = (Uint16 *)0x003D8000;//FLASHJ=0x3D8000~0x3D9FFF, 共 0x2000 Words = 4096 点
+		   for(i=0;i<0x1000;i++)
+		     {
+		       if((*Flash_Ptr)==(0xffff))
+			       break;
+			   else
+			     Flash_Ptr+=2;
+			 }
+
 	      while(1)
-		  {	 	  		  
+		  {
 	         pdv=0;
 			 tdv=0;
 	         for(i=0;i<25;i++)//13*2*180=4.28s
-			 {	         
+			 {
 				 ADS1222_sample(1);
-				 pdv+=ADSData;		 
+				 pdv+=ADSData;
 			     ADS1222_sample(0);
-				 tdv+=ADSData;			 	 	 
+				 tdv+=ADSData;
 			 }
 			 pdv/=25;
 			 tdv/=25;
-	         
+
 			 if( ((pdv-pdo)<5) && ((pdv-pdo)>-5) )
 			 {
 			     ADBuffer[0]=pdv;
@@ -338,91 +340,78 @@ void main(void)
 			  pdo=pdv;
 		 }
 	   }
-  
 
-     if((DataReqFlag) && (ResetReqFlag==0))//提取波形
+
+
+     if(DataReqFlag)//提取波形
 	 {
-	  FlowBegin=0;
-	  StopFlag=0x05;//何天成
-	  if( (DataReqFlag>0xf0) && (DataReqFlag<0xf5) )
+	  if(DataReqFlag>0xbb)
 	   {
 	    DataReqCount=0;
-		 if(AbsTime(DataReqFlag&0x0f)!=5)
-		     AbsTime(DataReqFlag&0x0f);
+		 if(AbsTime(DataReqFlag-0xbb)==5)//按通道采样
+		 {
+			 SendFrameData (DataReqFlag);//响应主控板
+			 FlowBegin=0;//暂停流量采样
+		 }
 	   }
 
-	   if(DataReqFlag==0xff)
+	   if(DataReqFlag==0xbb)
 	    {
-		 UARTPutByte(ADC[DataReqCount]>>8);
-		 UARTPutByte(ADC[DataReqCount]);
+		 UARTPutByte(ADC[DataReqCount]);//先低字节
+		 UARTPutByte(ADC[DataReqCount]>>8);//再高字节
 		 DataReqCount++;
 		 if(DataReqCount>=1801)
-           {FlowBegin=0;
-	        StopFlag=0;//何天成
+           {
+			 FlowBegin=1;//重新开始流量采样
 	       }
 		}
 
-		if(DataReqFlag==0xfe)
-	    {
-		 UARTPutByte(ADC[DataReqCount+500]>>8);
-		 UARTPutByte(ADC[DataReqCount+500]);
-		 DataReqCount++;
-		 if(DataReqCount>=901)
-           {FlowBegin=0;
-	        StopFlag=0;//何天成
-	       }
-		}
+	   DataReqFlag=0;//清空波形请求标志
+	 }
 
-	   DataReqFlag=0;
-	 }	
-	
 
-	   if( (FlowBegin==1) && (StopFlag<10) )//流量、压力、温度采样
-	   {//约450ms循环一次
-	   
-	  	 ADS1222_sample(2);
-		 wd=ADSData;
+   if(FlowBegin==1)//流量、压力、温度采样,约450ms循环一次
+	  {
+	  	// ADS1222_sample(2);//板载温度
+		// wd=ADSData;
 
-         ADS1222_sample(1);//70ms
+         ADS1222_sample(1);//70ms，压力
 		 pd=ADSData;
 
-         ADS1222_sample(0);//70ms
+         ADS1222_sample(0);//70ms，温度
 		 td=ADSData;
-	   
+
 	    DTC[0]=0;DTC[1]=0;DTC[2]=0;DTC[3]=0;
 	    start_ss=0;
         start_sn=0;
         start_xs=0;
-        start_xn=0;	
+        start_xn=0;
 
 		for(i=0;i<16;i++)
-		  {	
+		  {
 		    if(AbsTime(1)==5)//3.5ms
 		     {DT[0][DTC[0]]=t;DTC[0]++;}
 
 			if(AbsTime(2)==5)//3.5ms
-		     {DT[1][DTC[1]]=t;DTC[1]++;}			 		     
- 	        
-		    if(AbsTime(3)==5) //3.5ms
-		     {DT[2][DTC[2]]=t;DTC[2]++;}
-			
-			if(AbsTime(4)==5)//3.5ms
-		     {DT[3][DTC[3]]=t;DTC[3]++;}		     			 	 
+		     {DT[1][DTC[1]]=t;DTC[1]++;}
+
+		    //if(AbsTime(3)==5) //3.5ms
+		    // {DT[2][DTC[2]]=t;DTC[2]++;}
+
+			//if(AbsTime(4)==5)//3.5ms
+		    // {DT[3][DTC[3]]=t;DTC[3]++;}
 
 			 CalP();//调整换能器幅值
-
-			 if(FlowBegin!=1) 
-			    i=100;
 		  }
 
-			DataCheck(2);//1ms
-			DataCheck(3);//1ms
-            if((RD[0].f)>=(RD[1].f))
+			DataCheck(0);//1ms
+			DataCheck(1);//1ms
+            if((RD[0].f)>=(RD[1].f))//严重算错时纠偏
 			 {
 			   while( ((RD[0].f)-(RD[1].f))>=1000)
 			      RD[0].f-=1000;
 			 }
-            if((RD[1].f)>=(RD[0].f))
+            if((RD[1].f)>=(RD[0].f))//严重算错时纠偏
 			 {
 			   while( ((RD[1].f)-(RD[0].f))>=1000)
 			      RD[1].f-=1000;
@@ -431,9 +420,9 @@ void main(void)
 			RDa[0].f=RD[0].f;
 			RDa[1].f=RD[1].f;
 			EINT;
-
-			DataCheck(0);//1ms
-			DataCheck(1);//1ms	
+/*
+			DataCheck(2);//1ms
+			DataCheck(3);//1ms
             if((RD[2].f)>=(RD[3].f))
 			 {
 			   while( ((RD[2].f)-(RD[3].f))>=1000)
@@ -448,81 +437,39 @@ void main(void)
 			RDa[2].f=RD[2].f;
 			RDa[3].f=RD[3].f;
 			EINT;
+*/
 
-		    StopFlag++;		
-		    
-		    if( ((Delv1>1365)&&(Delv2>1365)&&(abs(RDa[0].f-RDa[1].f)>500)) || ((Delv3>1365)&&(Delv4>1365)&&(abs(RDa[2].f-RDa[3].f)>500)) )
-			{
+		    //if( ((Delv1>1365)&&(Delv2>1365)&&(abs(RDa[0].f-RDa[1].f)>500)) || ((Delv3>1365)&&(Delv4>1365)&&(abs(RDa[2].f-RDa[3].f)>500)) )
+		    if( ((Delv1>1365)&&(Delv2>1365)&&(abs(RDa[0].f-RDa[1].f)>500)) )
+			{//视情况调整阈值
 			  CalThr();
 			}
-	
        }
-
-	  	   
-	  if( (FlowBegin==0) && (StopFlag==0) )//压力、温度采样
-	   {//约230ms循环一次
-        AbsTime(1);
-		ADS1222_sample(2);//70
-		wd=ADSData;
-        AbsTime(2);
-
-        ADS1222_sample(1);//70
-		pd=ADSData;
-        AbsTime(3);
-        ADS1222_sample(0);//70
-		td=ADSData;	
-        AbsTime(4);
-
-		CalP();//调整换能器幅值
-	   }
-	  
-	   
-	   
-	  
-
-	 if(StopFlag>9)
-	   {
-		    FlowBegin=0;
-		    StopFlag=0;
-
-	        RDD[0]=0;RDD[1]=0;RDD[2]=0;RDD[3]=0;
-			RD[0].f=0.0;RD[1].f=0.0;RD[2].f=0.0;RD[3].f=0.0;
-			SC[0]=0;SC[1]=0;SC[2]=0;SC[3]=0;
-			DTC[0]=0;DTC[1]=0;DTC[2]=0;DTC[3]=0;
-			for(i=0;i<10;i++)
-			   {df[0][i]=0;df[1][i]=0;df[2][i]=0;df[3][i]=0;}	
-
-			for(i=0;i<100;i++)
-		    {std[i].v=0;
-			 std[i].c=0;
-			 std[i].f=0;}
-	   }
-
-
-   }  	
-} 	
+   }
+}
 
 
 void DataCheck(char c)
 {
-  
+
+
 char i,k,j;
  float f,g;
 
-#if RELEASE 
+#if RELEASE
   if(DTC[c]==0)
    {RDD[c]=0;
 	RD[c].f=0.0;
 	SC[c]=0;
 	for(i=0;i<10;i++)
-	  {df[c][i]=0;}	
+	  {df[c][i]=0;}
 	return;
    }
 
 	for(i=0;i<100;i++)
 	  std[i].c=0;
 	k=1;//默认第一个数据是标准
-    std[0].v=DT[c][0];	
+    std[0].v=DT[c][0];
 	std[0].f=DT[c][0];
     std[0].c=1;
     for(i=1;i<DTC[c];i++)
@@ -613,12 +560,13 @@ char i,k,j;
 		  for(i=0;i<SC[c];i++)
 		    {f+=df[c][i];}
 		  g=SC[c];
-		  f=f/g;		 
+		  f=f/g;
           RD[c].f=f;
 		  f-=100000.0;
 		  f*=4.0;
 		  RDD[c]=f;
-		  
+
+
 }
 
 void CalP()//幅值自动调整到2000mV左右
@@ -684,71 +632,7 @@ void CalP()//幅值自动调整到2000mV左右
 			{
 				ISRSciCom05();
 			}
-		}	 
-	}
-
-//	if((ch==3)||(ch==4))
-	{
-		if( (Delv3<=MINP) && (Delv4<=MINP) )//顺、逆都小于1800mV，则需要增大放大倍数
-		{
-			ISRSciCom0B();
 		}
-		else if( (Delv3>=MAXP) && (Delv4>=MAXP) )//顺、逆都大于2200mV，则需要减小放大倍数
-		{
-			ISRSciCom06();
-		}
-		else if( (Delv3>MAXP) && (Delv4<MINP) )
-		{
-			if(((Delv3+Delv4)/2)> MAXP )
-			{
-				ISRSciCom06();
-			}
-			else if(((Delv3+Delv4)/2)<MINP)
-			{
-				if(Delv3<3800)
-					ISRSciCom0B();
-			}
-		}
-		else if( (Delv3<MINP) && (Delv4>MAXP) )
-		{
-			if(((Delv3+Delv4)/2)>MAXP)
-			{
-				ISRSciCom06();
-			}
-			else if(((Delv3+Delv4)/2)<MINP )
-			{
-				if(Delv4<3800)
-					ISRSciCom0B();
-			}
-		}
-		else if( (Delv3>=MINP)&&(Delv3<=MAXP)&&(Delv4<=MINP) )
-		{
-			if(((Delv3+Delv4)/2)<MINP)
-			{
-				ISRSciCom0B();
-			}
-		}
-		else if( (Delv4>=MINP)&&(Delv4<=MAXP)&&(Delv3<=MINP) )
-		{
-			if(((Delv3+Delv4)/2)<MINP )
-			{
-				ISRSciCom0B();
-			}
-		}
-		else if( (Delv3>=MINP)&&(Delv3<=MAXP)&&(Delv4>=MAXP) )
-		{
-			if(((Delv3+Delv4)/2)>MAXP )
-			{
-				ISRSciCom06();
-			}
-		}
-		else if( (Delv4>=MINP)&&(Delv4<=MAXP)&&(Delv3>=MAXP) )
-		{
-			if(((Delv3+Delv4)/2)>MAXP )
-			{
-				ISRSciCom06();
-			}
-		}	 
 	}
 }
 
@@ -756,54 +640,33 @@ void CalP()//幅值自动调整到2000mV左右
 //2-上流量计逆流,3-下流量计顺流,4-下流量计逆流
 #pragma CODE_SECTION(AbsTime, "AbsTimeFuncs")
 unsigned char AbsTime(unsigned char ch)
-{    	
-
-
-
+{
     Delv=0;
 
     EALLOW;
 	SysCtrlRegs.PCLKCR.bit.ADCENCLK=1;
-	EDIS; 
+	EDIS;
      if(ch==1||ch==2)
 	 {
 
-    AdcRegs.ADCTRL3.bit.ADCPWDN=1;//ADC其它电路上电 
-	AdcRegs.ADCTRL3.bit.ADCCLKPS=1; 
+    AdcRegs.ADCTRL3.bit.ADCPWDN=1;//ADC其它电路上电
+	AdcRegs.ADCTRL3.bit.ADCCLKPS=1;
 	AdcRegs.ADCTRL1.bit.CPS=0;//对外设时钟HSPCLK不分频
-	AdcRegs.ADCTRL3.bit.SMODE_SEL=0;//顺序采样模式	
+	AdcRegs.ADCTRL3.bit.SMODE_SEL=0;//顺序采样模式
 	AdcRegs.MAX_CONV.bit.MAX_CONV=0;//最大转换通道数
-	AdcRegs.CHSELSEQ1.bit.CONV00=0;//ADC输入通道选择排序		
+	AdcRegs.CHSELSEQ1.bit.CONV00=0;//ADC输入通道选择排序
 	AdcRegs.ADC_ST_FLAG.bit.INT_SEQ1_CLR=1;//清除SEQ1中断标示
-	AdcRegs.ADC_ST_FLAG.bit.INT_SEQ2_CLR=1;	//清除SEQ2中断标示	
+	AdcRegs.ADC_ST_FLAG.bit.INT_SEQ2_CLR=1;	//清除SEQ2中断标示
 	AdcRegs.ADCTRL2.bit.EVB_SOC_SEQ=0;//级联排序器不使能EVB
 	AdcRegs.ADCTRL2.bit.RST_SEQ1=1;//将排序器复位到CONV00
 	AdcRegs.ADCTRL2.bit.INT_ENA_SEQ1=0;//使能SEQ1的中断申请
 	AdcRegs.ADCTRL2.bit.INT_MOD_SEQ1=0;//每个SEQ1序列结束时产生中断
 	AdcRegs.ADCTRL2.bit.EVA_SOC_SEQ1=0;//EVA不能触发SEQ1
-	AdcRegs.ADCTRL2.bit.EXT_SOC_SEQ1=0;//外部信号不能触发SEQ1 
+	AdcRegs.ADCTRL2.bit.EXT_SOC_SEQ1=0;//外部信号不能触发SEQ1
     }
-	 if(ch==3||ch==4)
-	{
-	 
 
-    AdcRegs.ADCTRL3.bit.ADCPWDN=1;//ADC其它电路上电 
-	AdcRegs.ADCTRL3.bit.ADCCLKPS=1; 
-	AdcRegs.ADCTRL1.bit.CPS=0;//对外设时钟HSPCLK不分频
-	AdcRegs.ADCTRL3.bit.SMODE_SEL=0;//顺序采样模式	
-	AdcRegs.MAX_CONV.bit.MAX_CONV=0;//最大转换通道数
-	AdcRegs.CHSELSEQ1.bit.CONV00=1;//ADC输胪ǖ姥≡衽判?	
-	AdcRegs.ADC_ST_FLAG.bit.INT_SEQ1_CLR=1;//清除SEQ1中断标示
-	AdcRegs.ADC_ST_FLAG.bit.INT_SEQ2_CLR=1;	//清除SEQ2中断标示	
-	AdcRegs.ADCTRL2.bit.EVB_SOC_SEQ=0;//级联排序器不使能EVB
-	AdcRegs.ADCTRL2.bit.RST_SEQ1=1;//将排序器复位到CONV00
-	AdcRegs.ADCTRL2.bit.INT_ENA_SEQ1=0;//使能SEQ1的中断申请
-	AdcRegs.ADCTRL2.bit.INT_MOD_SEQ1=0;//每个SEQ1序列结束时产生中断
-	AdcRegs.ADCTRL2.bit.EVA_SOC_SEQ1=0;//EVA不能触发SEQ1
-	AdcRegs.ADCTRL2.bit.EXT_SOC_SEQ1=0;//外部信号不能触发SEQ1 
-      
-	}DINT;
-	//以下指令为三周期,但第一条指令还要再加三周期,因为要把目标寄存器的值移到DP中去.
+	DINT;
+	//以下指令为三周期,但第一条指令还要再尤芷?因为要把目标寄存器的值移到DP中去.
     //发射64个周期,先发正脉冲, 周期1us,共延迟64us
 
    // EALLOW;
@@ -811,16 +674,10 @@ unsigned char AbsTime(unsigned char ch)
 	switch(ch)
 	{
 	 case 1:
-	    IN1=0;EN1=0;EN2=1;EN3=1;EN4=1;
+	    IN1=0;EN1=0;EN2=1;
 	 break;
 	 case 2:
-	    IN1=1;EN1=0;EN2=1;EN3=1;EN4=1;
-	 break;
-	 case 3:
-	    IN2=0;EN1=1;EN2=1;EN3=0;EN4=1;
-	 break;
-	 case 4:
-	    IN2=1;EN1=1;EN2=1;EN3=0;EN4=1;
+	    IN1=1;EN1=0;EN2=1;
 	 break;
 	 default:
 	    return 0;
@@ -883,7 +740,7 @@ unsigned char AbsTime(unsigned char ch)
 	S1=0;S2=0;NNH S2=0;S1=0;NNL
 	S1=0;S2=0;NNH S2=0;S1=0;NNL
 	S1=0;S2=0;NNH S2=0;S1=0;NNL
-	
+
 	S2=0;S1=0;
 
 
@@ -894,30 +751,13 @@ unsigned char AbsTime(unsigned char ch)
 		IN1=0;
 		EN1=1;
 		EN2=0;
-		EN3=1;
-		EN4=1;
 	 break;
 	 case 2:
 		IN1=1;
 		EN1=1;
 		EN2=0;
-		EN3=1;
-		EN4=1;
 	 break;
-	 case 3:
-		IN2=0;
-		EN1=1;
-	    EN2=1;
-		EN3=1;
-		EN4=0;
-	 break;
-	 case 4:
-		IN2=1;
-		EN1=1;
-	    EN2=1;
-		EN3=1;
-		EN4=0;
-	 break;
+
 	 default:
 	    return 0;
 	}
@@ -942,8 +782,8 @@ unsigned char AbsTime(unsigned char ch)
    asm(" MOVL XAR2, #7108H");  //单指令周期
    asm(" MOVL XAR3, #_ADC");   //单指令周期
 
-			 
-		//总延时50000+2734.375+15.625*21+26000=79062.75ns	 	
+
+		//总延时50000+2734.375+15.625*21+26000=79062.75ns
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2145,7 +1985,6 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-#endif
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2175,7 +2014,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2225,7 +2064,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2275,7 +2114,47 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4芷?
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2325,16 +2204,6 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2346,36 +2215,6 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4芷
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2425,7 +2264,47 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2475,16 +2354,6 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2496,36 +2365,6 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-    asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2575,7 +2414,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2625,7 +2464,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2675,7 +2514,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周?
@@ -2712,7 +2551,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4芷?
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2725,7 +2564,7 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
-	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期	   
+	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
     asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
@@ -2746,20 +2585,20 @@ unsigned char AbsTime(unsigned char ch)
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
 	asm(" MOV ACC,*XAR2");	  	   asm(" MOV *XAR3++,ACC");//4周期
+#endif
 
-
-	EN1=1;EN2=1;EN3=1;EN4=1;//所有模拟开关不使能	
+	EN1=1;EN2=1;//所有模拟开关不使能
     EINT;
 
-   
-    
+
+
 	AdcRegs.ADCTRL1.bit.RESET=1;//ADC模块复位
 	NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;
 	AdcRegs.ADCTRL1.bit.SUSMOD=0;
 	AdcRegs.ADCTRL1.bit.ACQ_PS=0;//采样窗口大小 = 1 ADCLK
 	AdcRegs.ADCTRL1.bit.CONT_RUN=1;//连续运
 	AdcRegs.ADCTRL1.bit.SEQ_CASC=0;//级联工作模式
-    AdcRegs.ADCTRL3.bit.ADCCLKPS=3; 
+    AdcRegs.ADCTRL3.bit.ADCCLKPS=3;
   	AdcRegs.ADCTRL3.bit.ADCBGRFDN=3;//带隙和参考电路上电
 
    // EDIS;
@@ -2773,7 +2612,7 @@ unsigned char AbsTime(unsigned char ch)
 	{
 		 ADC[k]=(ADC[k])>>4;
 	}
-	     
+
 
 	 //5点平滑滤波
 	  AT[0]=ADC[0];
@@ -2855,18 +2694,18 @@ unsigned char AbsTime(unsigned char ch)
   k = 50;
   Maxcount[0]=0;
 
-            while (1) 
+            while (1)
             {
                 if (((ADC[k]) > avr1024))
                     if (((ADC[k] - avr1024) > j))
                         if (((ADC[k]) > (ADC[k - 2])) && ((ADC[k]) > (ADC[k + 2])))
                             if (((ADC[k - 1]) > (ADC[k - 3])) && ((ADC[k + 1]) > (ADC[k + 3])))
-                                if (((ADC[k - 2]) > (ADC[k - 4])) && ((ADC[k + 2]) > (ADC[k + 4]))) 		 
+                                if (((ADC[k - 2]) > (ADC[k - 4])) && ((ADC[k + 2]) > (ADC[k + 4])))
                                 {
                                     Maxcount[i] = k;
                                     Maxtemp[i] = ADC[k];
                                     i++;
-                                    switch (i) 
+                                    switch (i)
                                     {
                                         case 2:
                                             if (((Maxcount[1] - Maxcount[0]) < 12) || ((Maxcount[1] - Maxcount[0]) > 20) || (Maxtemp[1] <= Maxtemp[0]))
@@ -2899,7 +2738,7 @@ unsigned char AbsTime(unsigned char ch)
                                                 Maxtemp[0] = Maxtemp[4];
                                                 Maxcount[0] = Maxcount[4];
                                             }
-                                            break;                                         
+                                            break;
                                     }
                                     k += 8;
                                 }
@@ -2907,7 +2746,7 @@ unsigned char AbsTime(unsigned char ch)
                     break;
                 k++;
                 if (k >= 1795)
-                    return 3; 
+                    return 3;
             }
 
             if (ADC[Maxcount[0] + 1] > ADC[Maxcount[0]])
@@ -2972,7 +2811,7 @@ unsigned char AbsTime(unsigned char ch)
 			}
 
 	    Firstplace=Maxcount[0];
-		if(tp[ch-1]==0xff)		  
+		if(tp[ch-1]==0xffff)//如果首滤阈值非法，则用一个默认值替代
 		  j=Delv/16;
 		else
           j=Delv/tp[ch-1];
@@ -2990,7 +2829,7 @@ unsigned char AbsTime(unsigned char ch)
 		if(Firstplace==0)
 		  return 4;//没有找到适合条件的首波
 
-	    Firstplace+=16*0; 
+	    Firstplace+=16*0;
 
 		for(k=Firstplace;k<Firstplace+8;k++)
 		{ if((ADC[k-1]>avr1024)&&(ADC[k]<=avr1024))
@@ -3011,7 +2850,7 @@ unsigned char AbsTime(unsigned char ch)
 	    RFFT32_brev(ipcb,ipcb,256);
 	    fft.calc(&fft);
 	    fft.split(&fft);
-	    fft.mag(&fft); 
+	    fft.mag(&fft);
 	   // frq=SF/512.0*fft.peakfrq;//不是整数个完整周期时基频计算有误差,需拟合后可消除.
 		angle=atan2((double)ipcb[fft.peakfrq*2+1],(double)ipcb[fft.peakfrq*2]);//+2.613928;//1.695869;
 		//angle=angle*180/PI;
@@ -3019,16 +2858,16 @@ unsigned char AbsTime(unsigned char ch)
 		angle+=90.0;
 
 		if(angle<0)
-		  angle+=360;	
+		  angle+=360;
 		angle-=180.0;
 
 		//求超声波传播的绝对时间
         t=79062.75+start*62.5-(angle*1000.0/360.0)-4000.0;
 
-		
+
 	    return 5;
-	   
-	  		 	    								 
+
+
 }
 
 
@@ -3049,12 +2888,12 @@ asm(" EDIS"); // Disable EALLOW protected register access
 /*** Force a complete PIpeline flush to ensure that the write to the last register
 configured occurs before returning. Safest thing is to wait 8 full cycles. ***/
 asm(" RPT #60 || NOP");
-} 
+}
 #endif
 
 
 void InitAdc(void)
-{   
+{
 
 	AdcRegs.ADCTRL1.bit.RESET=1;//ADC模块复位
 	NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;NOP;
@@ -3062,13 +2901,13 @@ void InitAdc(void)
 	AdcRegs.ADCTRL1.bit.ACQ_PS=0;//采样窗口大小 = 1 ADCLK
 	AdcRegs.ADCTRL1.bit.CONT_RUN=1;//连续运
 	AdcRegs.ADCTRL1.bit.SEQ_CASC=0;//级联工作模式
-    AdcRegs.ADCTRL3.bit.ADCCLKPS=3; 
+    AdcRegs.ADCTRL3.bit.ADCCLKPS=3;
   	AdcRegs.ADCTRL3.bit.ADCBGRFDN=3;//带隙和参考电路系?
     EALLOW;
 	SysCtrlRegs.PCLKCR.bit.ADCENCLK=0;
 	EDIS;
 
-}	
+}
 
 
 void DelaymS(unsigned char t)//150M时调准了，目前是64M，定时约为3.4t ms
@@ -3102,27 +2941,27 @@ long ln;
 	ln=0;
     while(MISO==0)
 	{ ln++;
-	  {if((ln)>100000) break;} 
-	}
-	  
-	for(Z=0;Z<26;Z++)
-	  {SCLK=1;
-	   asm(" RPT #64 || NOP");
-	   SCLK=0;
-	   asm(" RPT #40 || NOP");		
-	  }
-		  
-	ln=0;
-    while(MISO==0)
-	{ ln++;
-	  {if((ln)>100000) break;} 
+	  {if((ln)>100000) break;}
 	}
 
 	for(Z=0;Z<26;Z++)
 	  {SCLK=1;
 	   asm(" RPT #64 || NOP");
 	   SCLK=0;
-	   asm(" RPT #40 || NOP");		
+	   asm(" RPT #40 || NOP");
+	  }
+
+	ln=0;
+    while(MISO==0)
+	{ ln++;
+	  {if((ln)>100000) break;}
+	}
+
+	for(Z=0;Z<26;Z++)
+	  {SCLK=1;
+	   asm(" RPT #64 || NOP");
+	   SCLK=0;
+	   asm(" RPT #40 || NOP");
 	  }
 }
 
@@ -3130,18 +2969,20 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 {
     unsigned int x,y;
 	long tb,ln;
-	
+
+	return;//调试用，直接返回
+
     BEN=1;
-	
+
 	if(Ch<2)//采集压力温度
     {
-	TEN=0;	
+	TEN=0;
 	MUX=Ch;
 
 	ln=0;
     while(MISO)
 	{ ln++;
-	  {if((ln)>100000) break;} 
+	  {if((ln)>100000) break;}
 	}
 
       asm(" RPT #12 || NOP");
@@ -3150,32 +2991,32 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 	  asm(" RPT #12 || NOP");
 	  asm(" RPT #12 || NOP");
 
-	    tb=0; 
+	    tb=0;
 		for(x=0;x<24;x++)
 		{
-		    SCLK=1; 
-			asm(" RPT #22 || NOP");	
-			SCLK=0; 
+		    SCLK=1;
+			asm(" RPT #22 || NOP");
+			SCLK=0;
 			tb=tb<<1;
 			if((MISO)==1)
-			  tb|=0X01;	
-		    asm(" RPT #12 || NOP");			   
-		 } 
-		    SCLK=1; 
-		    asm(" RPT #12 || NOP");		
-		    SCLK=0; 
-			asm(" RPT #12 || NOP");	
+			  tb|=0X01;
+		    asm(" RPT #12 || NOP");
+		 }
+		    SCLK=1;
+		    asm(" RPT #12 || NOP");
+		    SCLK=0;
+			asm(" RPT #12 || NOP");
 
 
     ADSData=0;
     SCLK=0;
 
 	for(y=0;y<20;y++)//切换通道后第一次输出14ms,后面每次输出4.2ms
-	  { 
+	  {
 	  	ln=0;
 	    while(MISO)
 		{ ln++;
-		  {if((ln)>100000) break;} 
+		  {if((ln)>100000) break;}
 		}
 
       asm(" RPT #12 || NOP");
@@ -3187,34 +3028,34 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 		tb=0;
 	   for(x=0;x<24;x++)
 		{
-	     SCLK=1; 
-	 	 asm(" RPT #22 || NOP");	
-		 SCLK=0; 
+	     SCLK=1;
+	 	 asm(" RPT #22 || NOP");
+		 SCLK=0;
 		 tb=tb<<1;
 		 if((MISO)==1)
 		   tb|=0X01;
-		 asm(" RPT #12 || NOP");					   
-		 } 
-		SCLK=1; 
-		asm(" RPT #12 || NOP");	
-		SCLK=0;
-		asm(" RPT #12 || NOP");	
+		 asm(" RPT #12 || NOP");
+		 }
+		SCLK=1;
 		asm(" RPT #12 || NOP");
-		              
+		SCLK=0;
+		asm(" RPT #12 || NOP");
+		asm(" RPT #12 || NOP");
+
 		 tb&=0x00ffffff;
 	 if(Ch)//压力
 		    {tb>>=6;
 		    if(tb&0x00020000)
 	 	     tb|=0xfffc0000;
 			 pdd[y]=tb;
-	 	     }  
+	 	     }
 	 else //温度
 		  {  tb>>=8;
 			 if(tb&0x00008000)
 	 	     tb|=0xffff0000;
 			pdd[y]=tb;
 	 	  }
-	  } 
+	  }
 	  for(i=0;i<19;i++)
 		  {
 		   if(pdd[i]>pdd[i+1])
@@ -3223,7 +3064,7 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 			  pdd[i]=addpt;
 			}
 		  }
-		 
+
 		  for(i=0;i<18;i++)
 		  {
 		   if(pdd[i]>pdd[i+1])
@@ -3233,7 +3074,7 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 			}
 		  }
 
-		  
+
 		  for(i=0;i<17;i++)
 		  {
 		   if(pdd[i]<pdd[i+1])
@@ -3257,16 +3098,16 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 		    for(i=0;i<16;i++)
 			{ addpt+=pdd[i];}
 
-			ADSData=addpt/16;		
+			ADSData=addpt/16;
 	}
 	else//采集板载温度
 	{
 	 TEN=1;
-	 
+
       	ln=0;
 	    while(MISO)
 		{ ln++;
-		  {if((ln)>100000) break;} 
+		  {if((ln)>100000) break;}
 		}
 
 	    asm(" RPT #12 || NOP");
@@ -3280,24 +3121,24 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 		  {
 		    SCLK=1;
 			asm(" RPT #22 || NOP");
-			SCLK=0; 	
+			SCLK=0;
 			tb=tb<<1;
 			if((MISO)==1)
-			  tb|=0X01; 
+			  tb|=0X01;
 			asm(" RPT #12 || NOP");
-		  } 
-		SCLK=1; 
-		asm(" RPT #12 || NOP");	
-		SCLK=0; 
-		asm(" RPT #12 || NOP");	
-		ADSData=0;	
-		
+		  }
+		SCLK=1;
+		asm(" RPT #12 || NOP");
+		SCLK=0;
+		asm(" RPT #12 || NOP");
+		ADSData=0;
+
 		for(y=0;y<1;y++)//切换通道后第一次输出14ms,后面每次输出4.2ms
-		{			
+		{
 			ln=0;
 		    while(MISO)
 			{ ln++;
-			  {if((ln)>100000) break;} 
+			  {if((ln)>100000) break;}
 			}
 
 	      asm(" RPT #12 || NOP");
@@ -3305,28 +3146,28 @@ void ADS1222_sample(unsigned char Ch)//压力温度通道约80ms
 		  SCLK=0;
 		  asm(" RPT #12 || NOP");
 		  asm(" RPT #12 || NOP");
-	  	 
+
 		    tb=0;
 			for(x=0;x<24;x++)
 			{
-			    SCLK=1; 
-				asm(" RPT #22 || NOP");	
-			    SCLK=0; 	
+			    SCLK=1;
+				asm(" RPT #22 || NOP");
+			    SCLK=0;
 				tb=tb<<1;
 				if((MISO)==1)
-				  tb|=0X01;	
-				asm(" RPT #12 || NOP");   
-			 } 
-			SCLK=1; 
-			asm(" RPT #12 || NOP");	
-			SCLK=0; 
+				  tb|=0X01;
+				asm(" RPT #12 || NOP");
+			 }
+			SCLK=1;
 			asm(" RPT #12 || NOP");
-         
+			SCLK=0;
+			asm(" RPT #12 || NOP");
+
 			 tb&=0x00ffffff;
 			 tb>>=8;//取16位有效数
-		   if(tb&0x00008000) 
+		   if(tb&0x00008000)
 		 	  tb|=0xffff0000;
-		   ADSData+=tb;		 
+		   ADSData+=tb;
 	    }
 	 ADSData/=1;
 	 }
@@ -3380,62 +3221,12 @@ void ISRSciCom05(void)
 	 asm(" RPT #254 || NOP");//256个指令周期=4us
 	 asm(" RPT #254 || NOP");//256个指令周期=4us
 	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us			 
-	 CS1=1;		
+	 asm(" RPT #254 || NOP");//256个指令周期=4us
+	 CS1=1;
 	 EDIS;
 }
 
-void ISRSciCom06(void)
-{
-	EALLOW;
-	 UD2=1;
-     asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 CS2=0;
-     asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 UD2=0;
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 UD2=1;
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 UD2=0;
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us			 
-	 CS2=1;		
-	 EDIS;
-}
+
 
 void ISRSciCom0A(void)
 {
@@ -3467,35 +3258,7 @@ void ISRSciCom0A(void)
 	 EDIS;
 }
 
-void ISRSciCom0B(void)
-{
-	EALLOW;
-	 UD2=0;
-     asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 CS2=0;
-     asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-     asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 UD2=1;
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-     asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 asm(" RPT #254 || NOP");//256个指令周期=4us
-	 CS2=1;
-	 EDIS;
-}
+
 
 
 
@@ -3516,17 +3279,17 @@ unsigned char CalThr(void)
 
   unsigned char r,k,i;
   r=0;
-	
+
 	for(k=0;k<10;k++)//20160802
 	{
 		    AbsTime(1);//3.5ms
 				DelaymS(1);
-			AbsTime(3);//3.5ms	
-				DelaymS(1);		 		             
-		    AbsTime(2); //3.5ms	
-		    	DelaymS(1);		
-			AbsTime(4);//3.5ms	
-				DelaymS(1);	     			 	 
+			AbsTime(3);//3.5ms
+				DelaymS(1);
+		    AbsTime(2); //3.5ms
+		    	DelaymS(1);
+			AbsTime(4);//3.5ms
+				DelaymS(1);
 		    CalP();//调整换能器幅值
 	}
 
@@ -3561,7 +3324,7 @@ unsigned char CalThr(void)
 					{
 						tp[0]=tp1[i];
 						tp[1]=tp2[k];
-						i=5;k=5;	
+						i=5;k=5;
 					}
 				}
 
@@ -3571,7 +3334,7 @@ unsigned char CalThr(void)
 				}
 			}
 		}
-		else 
+		else
 		{
 		    for(i=0;i<4;i++)
 		    {
@@ -3581,7 +3344,7 @@ unsigned char CalThr(void)
 					{
 						tp[0]=tp1[k];
 						tp[1]=tp2[i];
-						i=5;k=5;	
+						i=5;k=5;
 					}
 				}
 
@@ -3636,7 +3399,7 @@ unsigned char CalThr(void)
 				}
 			}
 		}
-		else 
+		else
 		{
 		    for(i=0;i<4;i++)
 			{
@@ -3661,4 +3424,305 @@ unsigned char CalThr(void)
 
 
 	return r;
+}
+
+#if RELEASE
+#pragma CODE_SECTION(delayus, "delayusFuncs")
+#endif
+void delayus(unsigned int t)// time = 0.9841t + 0.2938 (us)    clock=64M Hz
+{
+   unsigned long l,k;
+
+    for(k=0;k<t;k++)
+		for(l=0;l<3;l++);
+}
+
+void reset()
+{
+  unsigned char st=1,i;
+  i=10;
+  DQ_DIR=0;
+  delayus(500);
+  delayus(20);
+  while((st)&&((i--)>1))
+  {
+   DQ_DIR=1;DQ=0;
+   delayus(750);
+   DQ_DIR=0;
+   delayus(100);
+   if(DQ==1)
+    st=1;
+   else
+    st=0;
+   delayus(500);
+ }
+}
+void write_byte(unsigned char date)
+{
+   unsigned char i,temp;
+
+    DQ_DIR=0;
+    delayus(2);
+    for(i=8;i>0;i--)
+    {
+     temp=date&0x01;//01010101
+     DQ_DIR=1;DQ=0;
+     delayus(20);
+     if(temp==1)
+      {DQ_DIR=0;}
+     delayus(45);
+     DQ_DIR=0;
+     date=date>>1;//00101010
+    }
+}
+
+unsigned char read_byte()
+{
+   unsigned char i,date;
+   static unsigned char  j;
+   for(i=8;i>0;i--)
+   {
+    date=date>>1;
+    DQ_DIR=0;
+    delayus(2);
+    DQ_DIR=1;DQ=0;
+ 	delayus(6);
+	DQ_DIR=0;
+    delayus(4);
+    j=DQ;
+    if(j==1)
+     {date=date|0x80;}//1000 0000
+    delayus(30);
+ }
+ return (date);
+}
+
+
+int get_tem()
+{
+ unsigned char tem1,tem2;
+ float aaa;
+ int temper;
+ reset();  //复位
+ write_byte(0xCC);//跳过ROM
+ write_byte(0x44);//温度转换
+ 
+ reset();
+ write_byte(0xCC);
+ write_byte(0xBE);
+ tem1=read_byte();
+ tem2=read_byte();
+
+
+ if((tem2&0xf8)!=0xf8)
+ {
+    aaa=(tem2*256+tem1)*6.25;
+    temper=(int)aaa;
+ }
+ else
+ {
+     aaa=(~(tem2*256+tem1)+1)*6.25;
+     temper=(int)aaa;
+ }
+ 
+ return temper;
+}
+ 
+
+void StreamDataInterpretation_B(unsigned char b)
+{
+                switch (FrameState)
+                {
+                    case IDEL:
+                        if (b == 0xE8)
+                        {
+                            FrameState = HEAD;
+                            RxFrameData.head = b;
+                        }
+                        else
+                            FrameState = IDEL;
+                        break;
+                    case HEAD:
+                        FrameState = FRAMELEN;
+                        RxFrameData.framelen = b;
+                        break;
+                    case FRAMELEN:
+                        FrameState = CMD;
+                        RxFrameData.cmd = b;
+                        break;
+                    case CMD:
+                        FrameState = INDEX;
+                        RxFrameData.index = b;
+                        break;
+                    case INDEX:
+                        FrameState = ADDR1;
+                        RxFrameData.addr1 = b;
+                        break;
+                    case ADDR1:
+                        FrameState = ADDR2;
+                        RxFrameData.addr2 = b;
+                        break;
+					case ADDR2:
+                        FrameState = ADDR3;
+                        RxFrameData.addr3 = b;
+                        break;
+					case ADDR3:
+                        FrameState = ADDR4;
+                        RxFrameData.addr4 = b;
+                        break;
+					case ADDR4:
+                        if(RxFrameData.cmd==0x88)//写校对表
+						{
+						  FrameState = DATA;
+						  RxFrameData.lentem=0;
+						}
+						else
+						{
+						  FrameState = OK;
+						}
+                        RxFrameData.check1 = b;
+                        break;
+                    case DATA:
+                        RxFrameData.databuf[RxFrameData.lentem] = b;
+                        RxFrameData.lentem++;
+                        if (RxFrameData.lentem >= RxFrameData.framelen)
+                        {
+                            FrameState = CHECK2;
+                        }
+                        break;
+                    case CHECK2:
+                        FrameState = OK;
+                        RxFrameData.check2 = b;
+                        break;
+                }
+
+                CommandInterpretation();//接收帧响应
+}
+
+
+void CommandInterpretation(void)
+{
+ 
+
+	unsigned int  packet_index,first_block,wts,i;
+ 
+
+ if (FrameState == OK)
+  {
+    switch (RxFrameData.cmd)
+    {
+        case 0x8D: //固件版本,复位,握手
+		    SendDataBuf[0]=0x10;//固件版本
+            SendFrameData (RxFrameData.cmd);
+            break;
+
+        case 0xc8://提取测试信息，按包索引每包返回64字节
+        	break;
+
+        case 0x8c://清空标定数据，40秒内必须返回
+        	 SendFrameData (RxFrameData.cmd);
+        	break;
+
+		case 0x9A://  提取测试数据,每块4096字节共64包，每个64字节，按首块索引(byte6,byte7)与包索引(byte4,byte5)，每次返回64字节
+			packet_index=RxFrameData.addr2;
+			packet_index<<=8;
+			packet_index|=(RxFrameData.addr1&0xff);
+			first_block=RxFrameData.addr4;
+			first_block<<=8;
+			first_block|=(RxFrameData.addr3&0xff);
+			break;
+
+ 	   case  0x89://全部采样，直读检测，直接返回8字节
+ 
+ 	 	 	wts = pd + 32768;//压力
+ 	 	 	UARTPutByte(wts);
+ 	 	 	UARTPutByte(wts>>8);
+ 
+ 	 	 	wts  = td + 32768;//温度
+ 	 	 	UARTPutByte(wts);
+ 	 	 	UARTPutByte(wts>>8);
+ 
+ 	 	 	wts  = 0x1234 ;//流量时间
+ 	 	 	UARTPutByte(wts);
+ 	 	 	UARTPutByte(wts>>8);
+ 
+ 	 	    wts  = 0x5678 ;//流量相位
+ 	 	 	UARTPutByte(wts);
+ 	 	 	UARTPutByte(wts>>8);
+ 	 	 	break;
+ 
+ 	 	 case  0x87://读校对表，按包索引每次上传一包共64字节
+ 	 	 	for(i=0;i<64;i++)
+ 	 	 	 {
+ 	 	 	 	 UARTPutByte(i);
+ 	 	 	 }
+ 	 	 	break;
+ 
+ 
+ 	 	 case  0x88://写校对表，按包索引存储成功后返回响应帧
+ 	 	 	 SendFrameData(RxFrameData.cmd);
+ 	 	 	 break;
+
+ 	 	 case 0xb2://读换能器参数，包括幅值与阈值，暂只考虑上流量计，共8字节
+ 	 		 i=Delv1;//上顺幅值
+			 i=i*3000/4096;
+			 UARTPutByte(i>>8);
+			 UARTPutByte(i);
+
+			 i=Delv2;//上逆幅值
+			 i=i*3000/4096;
+			 UARTPutByte(i>>8);
+			 UARTPutByte(i);
+
+			 i=tp[0];//上顺阈值
+			 UARTPutByte(i>>8);
+			 UARTPutByte(i);
+
+			 i=tp[1];//上逆阈值
+			 UARTPutByte(i>>8);
+			 UARTPutByte(i);
+ 	 		 break;
+
+ 	 	 case 0xbb://读换能器波形详细数据
+ 	 		 DataReqFlag=RxFrameData.cmd;
+ 	 		 break;
+
+ 	 	 case 0xbc://上顺波形起始命令
+ 	 		 DataReqFlag=RxFrameData.cmd;
+ 	 		 break;
+
+ 	 	case 0xbd://上逆波形起始命令
+ 	 		 DataReqFlag=RxFrameData.cmd;
+			 break;
+
+ 	 	case 0xbe://下顺波形起始命令
+ 	 		 DataReqFlag=RxFrameData.cmd;
+			 break;
+
+ 	 	case 0xbf://下逆波形起始命令
+ 	 		 DataReqFlag=RxFrameData.cmd;
+			 break;
+
+        default:
+
+            break;
+    }
+
+	FrameState = IDEL;
+  }
+}
+
+
+
+void SendFrameData(unsigned char com)
+{
+   UARTPutByte(0x55);
+   UARTPutByte(0x40);
+   UARTPutByte(com);
+   UARTPutByte(SendDataBuf[0]);
+   UARTPutByte(SendDataBuf[1]);
+   UARTPutByte(SendDataBuf[2]);
+   UARTPutByte(SendDataBuf[3]);
+   UARTPutByte(SendDataBuf[4]);
+   UARTPutByte(SendDataBuf[5]);
 }

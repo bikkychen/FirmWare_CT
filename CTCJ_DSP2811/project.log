@@ -1,0 +1,9 @@
+!NOTE: Source file 'rts2800n.lib' exists in the project, but with a different case. File is renamed to match the name in the PJT file.
+
+
+!CONFIGURATION: 'com.ti.ccstudio.buildDefinitions.C2000.Release.2071650028' [Thu Aug 03 19:37:04 CST 2017]
+
+	!TOOL: 'com.ti.ccstudio.buildDefinitions.C2000_6.2.exe.compilerRelease.947570709'
+
+		!WARNING: Unresolved option: com.ti.ccstudio.buildDefinitions.C2000_6.2.exe.compilerRelease.947570709::!--symdebug:dwarf
+

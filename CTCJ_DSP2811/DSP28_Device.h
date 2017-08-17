@@ -23,21 +23,22 @@
 
 //超声波收发电路模拟开关控制管脚宏定义
 //#define S1S2    GpioDataRegs.GPEDAT.all
-#define S1      GpioDataRegs.GPFDAT.bit.GPIOF4
-#define S2      GpioDataRegs.GPFDAT.bit.GPIOF5
+#define S1      GpioDataRegs.GPFDAT.bit.GPIOF3
+#define S2      GpioDataRegs.GPFDAT.bit.GPIOF2
 
-#define IN1     GpioDataRegs.GPBDAT.bit.GPIOB8
-#define IN2     GpioDataRegs.GPEDAT.bit.GPIOE2
+
+#define CS1     GpioDataRegs.GPEDAT.bit.GPIOE1
+//#define CS2     GpioDataRegs.GPBDAT.bit.GPIOB15
+#define UD1     GpioDataRegs.GPEDAT.bit.GPIOE2
+//#define UD2     GpioDataRegs.GPBDAT.bit.GPIOB14
+
+#define IN1     GpioDataRegs.GPFDAT.bit.GPIOF9
+//#define IN2     GpioDataRegs.GPEDAT.bit.GPIOE2
 	 
-#define EN1     GpioDataRegs.GPBDAT.bit.GPIOB6
-#define EN2     GpioDataRegs.GPBDAT.bit.GPIOB7
-#define EN3     GpioDataRegs.GPEDAT.bit.GPIOE1
-#define EN4     GpioDataRegs.GPEDAT.bit.GPIOE0
-
-#define CS1     GpioDataRegs.GPBDAT.bit.GPIOB10
-#define CS2     GpioDataRegs.GPBDAT.bit.GPIOB15
-#define UD1     GpioDataRegs.GPBDAT.bit.GPIOB9
-#define UD2     GpioDataRegs.GPBDAT.bit.GPIOB14
+#define EN1     GpioDataRegs.GPFDAT.bit.GPIOF8
+#define EN2     GpioDataRegs.GPFDAT.bit.GPIOF10
+//#define EN3     GpioDataRegs.GPEDAT.bit.GPIOE1
+//#define EN4     GpioDataRegs.GPEDAT.bit.GPIOE0
 
 #define BEN    GpioDataRegs.GPBDAT.bit.GPIOB0
 #define TEN    GpioDataRegs.GPBDAT.bit.GPIOB1
@@ -45,15 +46,19 @@
 #define MISO   GpioDataRegs.GPBDAT.bit.GPIOB3
 #define SCLK   GpioDataRegs.GPBDAT.bit.GPIOB5
 
-#define EN      GpioDataRegs.GPBDAT.bit.GPIOB13
+#define DQ     GpioDataRegs.GPBDAT.bit.GPIOB6
+#define DQ_DIR GpioMuxRegs.GPBDIR.bit.GPIOB6
 
-#define VM 5
-#define VS 4
+#define EN      GpioDataRegs.GPADAT.bit.GPIOA13
+
 
 #define RELEASE 1
 
-
+#if RELEASE
 #define ADC_LEN 1800
+#else
+#define ADC_LEN 300
+#endif
 
 
 #define	TARGET	1
@@ -66,6 +71,7 @@
 //---------------------------------------------------------------------------
 // Common CPU Definitions:
 //
+#define SCIRXBUFSIZE 32
 
 extern cregister volatile unsigned int IFR;
 extern cregister volatile unsigned int IER;

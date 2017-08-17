@@ -12,7 +12,7 @@ Area                               Addr   Size   Decimal Bytes (Attributes)
 
 Area                               Addr   Size   Decimal Bytes (Attributes)
 --------------------------------   ----   ----   ------- ----- ------------
-                            text   0098   17A2 =   6050. bytes (rel,con,rom)
+                            text   0098   17D2 =   6098. bytes (rel,con,rom)
 
        Addr  Global Symbol
       -----  --------------------------------
@@ -30,38 +30,38 @@ Area                               Addr   Size   Decimal Bytes (Attributes)
        058E  _Start
        0608  _Gear2Thr
        064D  _main
-       09E4  _E_comp
-       0A32  _EEPROM_write
-       0A3A  _EEPROM_read
-       0A41  mod16s
-       0A45  div16s
-       0A5F  mod16u
-       0A61  div16u
-       0A62  xdiv16u
-       0A7B  mod8u
-       0A7D  div8u
-       0A7E  xdiv8u
-       0A93  elpm32
-       0AA7  empy16s
-       0AB7  push_xgsetF03C
-       0AC0  pop_xgsetF03C
-       0AC9  neg32
-       0AD2  lsr32
-       0ADE  fpint
-       0B10  uint2fp
-       0B12  int2fp
-       0B1B  ulong2fp
-       0B1D  long2fp
-       0B34  unpacks
-       0B3C  tstR16_R19
-       0B44  unpacku
-       0B5D  normalize_and_pack
-       0B92  pack
-       0BA2  saveFPRegs
-       0BB1  restoreFPRegs
-       0BC0  fpmule
-       0C13  fpmule1
-       0C1D  __text_end
+       09FC  _E_comp
+       0A4A  _EEPROM_write
+       0A52  _EEPROM_read
+       0A59  mod16s
+       0A5D  div16s
+       0A77  mod16u
+       0A79  div16u
+       0A7A  xdiv16u
+       0A93  mod8u
+       0A95  div8u
+       0A96  xdiv8u
+       0AAB  elpm32
+       0ABF  empy16s
+       0ACF  push_xgsetF03C
+       0AD8  pop_xgsetF03C
+       0AE1  neg32
+       0AEA  lsr32
+       0AF6  fpint
+       0B28  uint2fp
+       0B2A  int2fp
+       0B33  ulong2fp
+       0B35  long2fp
+       0B4C  unpacks
+       0B54  tstR16_R19
+       0B5C  unpacku
+       0B75  normalize_and_pack
+       0BAA  pack
+       0BBA  saveFPRegs
+       0BC9  restoreFPRegs
+       0BD8  fpmule
+       0C2B  fpmule1
+       0C35  __text_end
 
 Area                               Addr   Size   Decimal Bytes (Attributes)
 --------------------------------   ----   ----   ------- ----- ------------
